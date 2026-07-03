@@ -5,6 +5,7 @@
   const RECORDS_KEY = "move-two-minutes.records.v1";
   const ACTIVE_KEY = "move-two-minutes.active.v1";
   const REMINDER_KEY = "move-two-minutes.reminder.v1";
+  const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
 
   const elements = {
     todayLabel: document.querySelector("#todayLabel"),
@@ -28,7 +29,11 @@
     customMinutes: document.querySelector("#customMinutes"),
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
-    alarmAudio: document.querySelector("#alarmAudio")
+    alarmAudio: document.querySelector("#alarmAudio"),
+    dailyReminderTime: document.querySelector("#dailyReminderTime"),
+    dailyReminderButton: document.querySelector("#dailyReminderButton"),
+    dailyReminderTestButton: document.querySelector("#dailyReminderTestButton"),
+    dailyReminderHint: document.querySelector("#dailyReminderHint")
   };
 
   let records = readRecords();
@@ -39,6 +44,8 @@
   let reminderTimerId = null;
   let selectedReminderDuration = 10 * 60_000;
   let wakeLock = null;
+  let dailyReminder = readDailyReminder();
+  let dailyReminderTimerId = null;
 
   function safeParse(key, fallback) {
     try {
@@ -73,6 +80,111 @@
   function saveReminder() {
     if (reminder === null) localStorage.removeItem(REMINDER_KEY);
     else localStorage.setItem(REMINDER_KEY, JSON.stringify(reminder));
+  }
+
+  function readDailyReminder() {
+    const value = safeParse(DAILY_REMINDER_KEY, null);
+    if (!value || typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)) return null;
+    return { time: value.time, lastNotifiedDate: typeof value.lastNotifiedDate === "string" ? value.lastNotifiedDate : null };
+  }
+
+  function saveDailyReminder() {
+    if (dailyReminder === null) localStorage.removeItem(DAILY_REMINDER_KEY);
+    else localStorage.setItem(DAILY_REMINDER_KEY, JSON.stringify(dailyReminder));
+  }
+
+  function localDateKey(date = new Date()) {
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function hasActivityToday() {
+    return records.some((record) => isSameLocalDay(record.endTime));
+  }
+
+  function nextDailyReminderDate() {
+    const [hours, minutes] = dailyReminder.time.split(":").map(Number);
+    const next = new Date();
+    next.setHours(hours, minutes, 0, 0);
+    if (next <= new Date() || dailyReminder.lastNotifiedDate === localDateKey()) next.setDate(next.getDate() + 1);
+    return next;
+  }
+
+  function renderDailyReminder() {
+    if (dailyReminder === null) {
+      elements.dailyReminderButton.textContent = "开启每日提醒";
+      elements.dailyReminderButton.classList.remove("is-active");
+      elements.dailyReminderTime.disabled = false;
+      elements.dailyReminderHint.textContent = "当天完成一次有效活动后不再提醒";
+      return;
+    }
+    elements.dailyReminderTime.value = dailyReminder.time;
+    elements.dailyReminderTime.disabled = true;
+    elements.dailyReminderButton.textContent = "关闭每日提醒";
+    elements.dailyReminderButton.classList.add("is-active");
+    elements.dailyReminderHint.textContent = hasActivityToday()
+      ? "今天已完成，明天继续提醒"
+      : `已开启，每天 ${dailyReminder.time} 提醒`;
+  }
+
+  function scheduleDailyReminder() {
+    window.clearTimeout(dailyReminderTimerId);
+    dailyReminderTimerId = null;
+    renderDailyReminder();
+    if (dailyReminder === null) return;
+    const delay = nextDailyReminderDate().getTime() - Date.now();
+    dailyReminderTimerId = window.setTimeout(fireDailyReminder, Math.min(delay, 2_147_000_000));
+  }
+
+  function fireDailyReminder() {
+    if (dailyReminder === null) return;
+    const today = localDateKey();
+    if (!hasActivityToday() && dailyReminder.lastNotifiedDate !== today) {
+      dailyReminder.lastNotifiedDate = today;
+      saveDailyReminder();
+      showToast("该站起来活动两分钟啦");
+      elements.alarmAudio.play().catch(() => {});
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("该站起来啦", { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+      }
+    }
+    scheduleDailyReminder();
+  }
+
+  async function toggleDailyReminder() {
+    if (dailyReminder !== null) {
+      dailyReminder = null;
+      saveDailyReminder();
+      scheduleDailyReminder();
+      showToast("每日提醒已关闭");
+      return;
+    }
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    dailyReminder = { time: elements.dailyReminderTime.value || "10:00", lastNotifiedDate: null };
+    saveDailyReminder();
+    primeAlarmAudio();
+    scheduleDailyReminder();
+    const notificationsDenied = "Notification" in window && Notification.permission === "denied";
+    showToast(notificationsDenied ? "已开启；浏览器通知被关闭，请保持页面打开" : "每日提醒已开启");
+  }
+
+  async function testDailyReminder() {
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+
+    showToast("该站起来活动两分钟啦");
+    const previewAudio = new Audio(elements.alarmAudio.currentSrc || elements.alarmAudio.src);
+    previewAudio.play().catch(() => showToast("提醒已显示；浏览器阻止了声音播放"));
+    window.setTimeout(() => {
+      previewAudio.pause();
+      previewAudio.currentTime = 0;
+    }, 3000);
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("该站起来啦", { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+    }
   }
 
   function saveRecords() {
@@ -184,6 +296,7 @@
       duration
     });
     saveRecords();
+    scheduleDailyReminder();
     if (reminder !== null) {
       stopReminder(false);
       showToast(`活动已生效，提醒已取消 · ${formatDuration(duration)}`);
@@ -431,15 +544,20 @@
       }).catch(() => showToast("无法播放，请检查手机媒体音量"));
     });
 
+    elements.dailyReminderButton.addEventListener("click", toggleDailyReminder);
+    elements.dailyReminderTestButton.addEventListener("click", testDailyReminder);
+
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         updateTimer();
         updateToday();
         requestWakeLock();
+        scheduleDailyReminder();
       }
     });
 
     renderAll();
+    scheduleDailyReminder();
     if (activeStart !== null) {
       elements.activityButton.classList.add("is-stopping");
       elements.activityButtonLabel.textContent = "结束活动";

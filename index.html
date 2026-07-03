@@ -82,6 +82,16 @@
 
         <button class="reminder-action" id="reminderButton" type="button">启动倒计时</button>
         <button class="reminder-action reminder-action--sound" id="alarmPlayButton" type="button" hidden>播放闹钟声音</button>
+
+        <div class="daily-reminder">
+          <div>
+            <strong>每天提醒我站起来</strong>
+            <p id="dailyReminderHint">当天完成一次有效活动后不再提醒</p>
+          </div>
+          <input id="dailyReminderTime" type="time" value="10:00" aria-label="每日提醒时间" />
+          <button class="reminder-action daily-reminder-button" id="dailyReminderButton" type="button">开启每日提醒</button>
+          <button class="reminder-action daily-reminder-test" id="dailyReminderTestButton" type="button">测试提醒效果</button>
+        </div>
       </section>
 
       <section class="history-section" aria-labelledby="historyTitle">

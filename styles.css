@@ -256,6 +256,32 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 .reminder-action.is-ringing { color: var(--ink); border-color: var(--lime-dark); background: var(--lime); }
 .reminder-action--sound { margin-top: 8px; color: white; border-color: var(--danger); background: var(--danger); }
 
+.daily-reminder {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #d0ccc1;
+}
+
+.daily-reminder strong { font-size: 0.9rem; }
+.daily-reminder p { margin: 5px 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+.daily-reminder input {
+  height: 42px;
+  border: 1px solid #d0ccc1;
+  border-radius: 11px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  font: inherit;
+  font-weight: 750;
+}
+.daily-reminder-button { grid-column: 1 / -1; margin-top: 0; }
+.daily-reminder-button.is-active { color: white; background: var(--ink); }
+.daily-reminder-test { grid-column: 1 / -1; margin-top: -4px; border-color: #aaa69b; color: var(--muted); }
+
 .section-heading { margin-bottom: 15px; }
 .text-button { border: 0; padding: 8px; color: var(--danger); background: transparent; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
 .history-list { display: grid; gap: 10px; }
