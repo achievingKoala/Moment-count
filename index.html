@@ -6,7 +6,363 @@
     <meta name="theme-color" content="#f6f2e9" />
     <meta name="description" content="记录每一次不少于两分钟的活动" />
     <title>动两分钟</title>
-    <link rel="stylesheet" href="styles.css" />
+    <style>
+:root {
+  color-scheme: light;
+  --ink: #152019;
+  --muted: #6b746d;
+  --paper: #f6f2e9;
+  --card: #fffdf8;
+  --line: #dedbd2;
+  --lime: #d9f26a;
+  --lime-dark: #bdd64f;
+  --danger: #ba3e35;
+  --shadow: 0 18px 50px rgba(28, 37, 30, 0.09);
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--paper); }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 92% 6%, rgba(217, 242, 106, 0.25), transparent 24rem),
+    var(--paper);
+  color: var(--ink);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; }
+
+button:focus-visible {
+  outline: 3px solid rgba(21, 32, 25, 0.25);
+  outline-offset: 3px;
+}
+
+.app-shell {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(48px, env(safe-area-inset-bottom));
+}
+
+.topbar,
+.timer-heading,
+.section-heading,
+.history-item,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar { margin-bottom: 26px; }
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 0; font-size: clamp(1.7rem, 8vw, 2.15rem); letter-spacing: -0.04em; }
+h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
+
+.brand-mark {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 46px;
+  height: 46px;
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--ink);
+  transform: rotate(-8deg);
+}
+
+.brand-mark span { width: 6px; border-radius: 4px; background: var(--lime); }
+.brand-mark span:nth-child(1) { height: 12px; }
+.brand-mark span:nth-child(2) { height: 25px; }
+.brand-mark span:nth-child(3) { height: 18px; }
+
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+
+.summary-card {
+  min-height: 154px;
+  padding: 19px;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-card > span { font-size: 0.82rem; font-weight: 700; opacity: 0.8; }
+.summary-card > strong { margin: auto 0 0; font-size: 3rem; line-height: 1; letter-spacing: -0.06em; }
+.summary-card > strong small { margin-left: 5px; font-size: 0.8rem; letter-spacing: 0; }
+.summary-card > small { margin-top: 7px; font-size: 0.68rem; opacity: 0.65; }
+.summary-card--dark { color: white; background: var(--ink); }
+.summary-card--lime { background: var(--lime); }
+
+.timer-card {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid rgba(21, 32, 25, 0.06);
+  border-radius: 28px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.timer-card::after {
+  content: "";
+  position: absolute;
+  right: -55px;
+  top: -55px;
+  width: 130px;
+  height: 130px;
+  border: 22px solid rgba(217, 242, 106, 0.22);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.status-pill {
+  position: relative;
+  z-index: 1;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.72);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.status-pill.is-active { color: var(--ink); border-color: var(--lime-dark); background: var(--lime); }
+
+.timer-display {
+  margin: 38px 0 24px;
+  font-size: clamp(4rem, 21vw, 6rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+  text-align: center;
+}
+
+.progress-track { height: 8px; overflow: hidden; border-radius: 99px; background: #e9e7df; }
+.progress-fill { width: 0; height: 100%; border-radius: inherit; background: var(--lime-dark); transition: width 0.35s ease; }
+.timer-hint { min-height: 40px; margin: 14px 0 19px; color: var(--muted); font-size: 0.82rem; line-height: 1.55; text-align: center; }
+
+.primary-action {
+  width: 100%;
+  min-height: 62px;
+  border: 0;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  color: white;
+  background: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.primary-action:active { transform: scale(0.985); }
+.primary-action.is-stopping { color: var(--ink); background: var(--lime); }
+.action-icon { width: 12px; height: 12px; border-radius: 50%; background: var(--lime); }
+.is-stopping .action-icon { border-radius: 3px; background: var(--ink); }
+
+.history-section { margin-top: 34px; }
+
+.reminder-card {
+  margin-top: 14px;
+  padding: 23px;
+  border: 1px solid rgba(21, 32, 25, 0.08);
+  border-radius: 28px;
+  background: #ece8dc;
+}
+
+.reminder-countdown {
+  margin: 25px 0 6px;
+  font-size: 3.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  text-align: center;
+}
+
+.reminder-hint {
+  min-height: 38px;
+  margin: 12px 0 18px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.reminder-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+
+.time-chip {
+  min-height: 39px;
+  padding: 5px;
+  border: 1px solid #d0ccc1;
+  border-radius: 11px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.56);
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.time-chip.is-selected { color: var(--ink); border-color: var(--ink); background: var(--lime); }
+.time-chip--test { color: var(--danger); border-color: rgba(186, 62, 53, 0.35); }
+
+.custom-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.custom-time label { color: var(--ink); font-weight: 750; }
+.custom-time input {
+  min-width: 0;
+  flex: 1;
+  height: 40px;
+  border: 1px solid #d0ccc1;
+  border-radius: 11px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.reminder-action {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 14px;
+  border: 1px solid var(--ink);
+  border-radius: 15px;
+  color: var(--ink);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.reminder-action.is-active { color: white; background: var(--ink); }
+.reminder-action.is-ringing { color: var(--ink); border-color: var(--lime-dark); background: var(--lime); }
+.reminder-action--sound { margin-top: 8px; color: white; border-color: var(--danger); background: var(--danger); }
+
+.daily-reminder {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #d0ccc1;
+}
+
+.daily-reminder strong { font-size: 0.9rem; }
+.daily-reminder p { margin: 5px 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+.daily-reminder input {
+  height: 42px;
+  border: 1px solid #d0ccc1;
+  border-radius: 11px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  font: inherit;
+  font-weight: 750;
+}
+.daily-reminder-button { grid-column: 1 / -1; margin-top: 0; }
+.daily-reminder-button.is-active { color: white; background: var(--ink); }
+.daily-reminder-test { grid-column: 1 / -1; margin-top: -4px; border-color: #aaa69b; color: var(--muted); }
+
+.section-heading { margin-bottom: 15px; }
+.text-button { border: 0; padding: 8px; color: var(--danger); background: transparent; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
+.history-list { display: grid; gap: 10px; }
+
+.history-item {
+  padding: 15px 13px 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.7);
+}
+
+.history-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.history-dot { flex: 0 0 auto; width: 11px; height: 32px; border-radius: 99px; background: var(--lime-dark); }
+.history-copy strong { display: block; margin-bottom: 4px; font-size: 0.93rem; }
+.history-copy time { color: var(--muted); font-size: 0.72rem; }
+.history-actions { display: flex; align-items: center; gap: 6px; }
+.duration-badge { white-space: nowrap; padding: 7px 10px; border-radius: 10px; background: #ece9df; font-size: 0.72rem; font-weight: 800; }
+.delete-button { width: 34px; height: 34px; border: 0; border-radius: 50%; color: var(--muted); background: transparent; font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.delete-button:hover { color: var(--danger); background: rgba(186, 62, 53, 0.08); }
+
+.empty-state { padding: 35px 20px; border: 1px dashed #cbc8bf; border-radius: 20px; color: var(--muted); text-align: center; }
+.empty-state strong { display: block; margin-bottom: 7px; color: var(--ink); font-size: 0.95rem; }
+.empty-state p { margin: 0; font-size: 0.76rem; line-height: 1.6; }
+
+.toast {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  width: max-content;
+  max-width: calc(100% - 40px);
+  padding: 12px 18px;
+  border-radius: 999px;
+  color: white;
+  background: var(--ink);
+  box-shadow: 0 10px 30px rgba(21,32,25,0.2);
+  font-size: 0.82rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: translate(-50%, 20px);
+  pointer-events: none;
+  transition: 0.25s ease;
+}
+
+.toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+.confirm-dialog { width: min(calc(100% - 40px), 390px); padding: 0; border: 0; border-radius: 24px; background: var(--card); box-shadow: var(--shadow); }
+.confirm-dialog::backdrop { background: rgba(21, 32, 25, 0.55); backdrop-filter: blur(3px); }
+.confirm-dialog form { padding: 28px 24px 22px; text-align: center; }
+.dialog-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: 0 auto 15px; border-radius: 50%; color: var(--danger); background: rgba(186,62,53,0.1); font-weight: 900; }
+.confirm-dialog h2 { margin-bottom: 8px; }
+.confirm-dialog p { margin-bottom: 23px; color: var(--muted); font-size: 0.82rem; }
+.dialog-actions { gap: 10px; }
+.dialog-button { flex: 1; min-height: 46px; border: 0; border-radius: 13px; font-weight: 800; cursor: pointer; }
+.dialog-button--muted { background: #ece9df; }
+.dialog-button--danger { color: white; background: var(--danger); }
+
+@media (max-width: 360px) {
+  .app-shell { padding-left: 14px; padding-right: 14px; }
+  .summary-card { min-height: 140px; padding: 16px; }
+  .timer-card { padding: 20px; }
+  .history-copy time { font-size: 0.66rem; }
+  .reminder-card { padding: 20px; }
+  .reminder-options { grid-template-columns: repeat(2, 1fr); }
+  .time-chip--test { grid-column: span 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}
+
+    </style>
   </head>
   <body>
     <main class="app-shell">
@@ -121,6 +477,589 @@
       </form>
     </dialog>
 
-    <script src="app.js"></script>
+    <script>
+(() => {
+  "use strict";
+
+  const MINIMUM_DURATION = 120_000;
+  const RECORDS_KEY = "move-two-minutes.records.v1";
+  const ACTIVE_KEY = "move-two-minutes.active.v1";
+  const REMINDER_KEY = "move-two-minutes.reminder.v1";
+  const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
+
+  const elements = {
+    todayLabel: document.querySelector("#todayLabel"),
+    todayCount: document.querySelector("#todayCount"),
+    todayDuration: document.querySelector("#todayDuration"),
+    timerTitle: document.querySelector("#timerTitle"),
+    timerDisplay: document.querySelector("#timerDisplay"),
+    timerHint: document.querySelector("#timerHint"),
+    statusPill: document.querySelector("#statusPill"),
+    progressFill: document.querySelector("#progressFill"),
+    activityButton: document.querySelector("#activityButton"),
+    activityButtonLabel: document.querySelector("#activityButtonLabel"),
+    historyList: document.querySelector("#historyList"),
+    clearButton: document.querySelector("#clearButton"),
+    confirmDialog: document.querySelector("#confirmDialog"),
+    toast: document.querySelector("#toast"),
+    reminderStatus: document.querySelector("#reminderStatus"),
+    reminderCountdown: document.querySelector("#reminderCountdown"),
+    reminderHint: document.querySelector("#reminderHint"),
+    reminderOptions: document.querySelector("#reminderOptions"),
+    customMinutes: document.querySelector("#customMinutes"),
+    reminderButton: document.querySelector("#reminderButton"),
+    alarmPlayButton: document.querySelector("#alarmPlayButton"),
+    alarmAudio: document.querySelector("#alarmAudio"),
+    dailyReminderTime: document.querySelector("#dailyReminderTime"),
+    dailyReminderButton: document.querySelector("#dailyReminderButton"),
+    dailyReminderTestButton: document.querySelector("#dailyReminderTestButton"),
+    dailyReminderHint: document.querySelector("#dailyReminderHint")
+  };
+
+  let records = readRecords();
+  let activeStart = readActiveStart();
+  let timerId = null;
+  let toastTimer = null;
+  let reminder = readReminder();
+  let reminderTimerId = null;
+  let selectedReminderDuration = 10 * 60_000;
+  let wakeLock = null;
+  let dailyReminder = readDailyReminder();
+  let dailyReminderTimerId = null;
+
+  function safeParse(key, fallback) {
+    try {
+      const value = localStorage.getItem(key);
+      return value === null ? fallback : JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+
+  function readRecords() {
+    const value = safeParse(RECORDS_KEY, []);
+    if (!Array.isArray(value)) return [];
+    return value.filter((record) =>
+      record && typeof record.id === "string" &&
+      Number.isFinite(record.startTime) && Number.isFinite(record.endTime) &&
+      Number.isFinite(record.duration) && record.duration >= MINIMUM_DURATION
+    );
+  }
+
+  function readActiveStart() {
+    const value = safeParse(ACTIVE_KEY, null);
+    return Number.isFinite(value) && value > 0 && value <= Date.now() ? value : null;
+  }
+
+  function readReminder() {
+    const value = safeParse(REMINDER_KEY, null);
+    if (!value || !Number.isFinite(value.deadline) || value.deadline <= 0) return null;
+    return { deadline: value.deadline, ringing: Boolean(value.ringing) };
+  }
+
+  function saveReminder() {
+    if (reminder === null) localStorage.removeItem(REMINDER_KEY);
+    else localStorage.setItem(REMINDER_KEY, JSON.stringify(reminder));
+  }
+
+  function readDailyReminder() {
+    const value = safeParse(DAILY_REMINDER_KEY, null);
+    if (!value || typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)) return null;
+    return { time: value.time, lastNotifiedDate: typeof value.lastNotifiedDate === "string" ? value.lastNotifiedDate : null };
+  }
+
+  function saveDailyReminder() {
+    if (dailyReminder === null) localStorage.removeItem(DAILY_REMINDER_KEY);
+    else localStorage.setItem(DAILY_REMINDER_KEY, JSON.stringify(dailyReminder));
+  }
+
+  function localDateKey(date = new Date()) {
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function hasActivityToday() {
+    return records.some((record) => isSameLocalDay(record.endTime));
+  }
+
+  function nextDailyReminderDate() {
+    const [hours, minutes] = dailyReminder.time.split(":").map(Number);
+    const next = new Date();
+    next.setHours(hours, minutes, 0, 0);
+    if (next <= new Date() || dailyReminder.lastNotifiedDate === localDateKey()) next.setDate(next.getDate() + 1);
+    return next;
+  }
+
+  function renderDailyReminder() {
+    if (dailyReminder === null) {
+      elements.dailyReminderButton.textContent = "开启每日提醒";
+      elements.dailyReminderButton.classList.remove("is-active");
+      elements.dailyReminderTime.disabled = false;
+      elements.dailyReminderHint.textContent = "当天完成一次有效活动后不再提醒";
+      return;
+    }
+    elements.dailyReminderTime.value = dailyReminder.time;
+    elements.dailyReminderTime.disabled = true;
+    elements.dailyReminderButton.textContent = "关闭每日提醒";
+    elements.dailyReminderButton.classList.add("is-active");
+    elements.dailyReminderHint.textContent = hasActivityToday()
+      ? "今天已完成，明天继续提醒"
+      : `已开启，每天 ${dailyReminder.time} 提醒`;
+  }
+
+  function scheduleDailyReminder() {
+    window.clearTimeout(dailyReminderTimerId);
+    dailyReminderTimerId = null;
+    renderDailyReminder();
+    if (dailyReminder === null) return;
+    const delay = nextDailyReminderDate().getTime() - Date.now();
+    dailyReminderTimerId = window.setTimeout(fireDailyReminder, Math.min(delay, 2_147_000_000));
+  }
+
+  function fireDailyReminder() {
+    if (dailyReminder === null) return;
+    const today = localDateKey();
+    if (!hasActivityToday() && dailyReminder.lastNotifiedDate !== today) {
+      dailyReminder.lastNotifiedDate = today;
+      saveDailyReminder();
+      showToast("该站起来活动两分钟啦");
+      elements.alarmAudio.play().catch(() => {});
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("该站起来啦", { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+      }
+    }
+    scheduleDailyReminder();
+  }
+
+  async function toggleDailyReminder() {
+    if (dailyReminder !== null) {
+      dailyReminder = null;
+      saveDailyReminder();
+      scheduleDailyReminder();
+      showToast("每日提醒已关闭");
+      return;
+    }
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    dailyReminder = { time: elements.dailyReminderTime.value || "10:00", lastNotifiedDate: null };
+    saveDailyReminder();
+    primeAlarmAudio();
+    scheduleDailyReminder();
+    const notificationsDenied = "Notification" in window && Notification.permission === "denied";
+    showToast(notificationsDenied ? "已开启；浏览器通知被关闭，请保持页面打开" : "每日提醒已开启");
+  }
+
+  async function testDailyReminder() {
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+
+    showToast("该站起来活动两分钟啦");
+    const previewAudio = new Audio(elements.alarmAudio.currentSrc || elements.alarmAudio.src);
+    previewAudio.play().catch(() => showToast("提醒已显示；浏览器阻止了声音播放"));
+    window.setTimeout(() => {
+      previewAudio.pause();
+      previewAudio.currentTime = 0;
+    }, 3000);
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("该站起来啦", { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+    }
+  }
+
+  function saveRecords() {
+    localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+  }
+
+  function saveActiveStart() {
+    if (activeStart === null) localStorage.removeItem(ACTIVE_KEY);
+    else localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeStart));
+  }
+
+  function pad(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function formatTimer(milliseconds) {
+    const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  function formatDuration(milliseconds) {
+    const totalMinutes = Math.floor(milliseconds / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours === 0) return `${Math.max(2, totalMinutes)} 分钟`;
+    return minutes === 0 ? `${hours} 小时` : `${hours} 小时 ${minutes} 分`;
+  }
+
+  function isSameLocalDay(timestamp, comparison = Date.now()) {
+    const date = new Date(timestamp);
+    const other = new Date(comparison);
+    return date.getFullYear() === other.getFullYear() &&
+      date.getMonth() === other.getMonth() &&
+      date.getDate() === other.getDate();
+  }
+
+  function formatRecordTime(record) {
+    const end = new Date(record.endTime);
+    const datePart = isSameLocalDay(record.endTime)
+      ? "今天"
+      : end.toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
+    const startTime = new Date(record.startTime).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const endTime = end.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return `${datePart} · ${startTime}–${endTime}`;
+  }
+
+  function updateToday() {
+    const todayRecords = records.filter((record) => isSameLocalDay(record.endTime));
+    const total = todayRecords.reduce((sum, record) => sum + record.duration, 0);
+    elements.todayCount.textContent = String(todayRecords.length);
+    const totalMinutes = Math.floor(total / 60_000);
+    elements.todayDuration.innerHTML = totalMinutes >= 60
+      ? `${(totalMinutes / 60).toFixed(totalMinutes % 60 === 0 ? 0 : 1)}<small>小时</small>`
+      : `${totalMinutes}<small>分钟</small>`;
+  }
+
+  function updateTimer() {
+    if (activeStart === null) {
+      elements.timerDisplay.textContent = "00:00";
+      elements.progressFill.style.width = "0%";
+      return;
+    }
+
+    const elapsed = Math.max(0, Date.now() - activeStart);
+    const isEffective = elapsed >= MINIMUM_DURATION;
+    elements.timerDisplay.textContent = formatTimer(elapsed);
+    elements.progressFill.style.width = `${Math.min(100, elapsed / MINIMUM_DURATION * 100)}%`;
+    elements.statusPill.textContent = isEffective ? "已生效" : "进行中";
+    elements.statusPill.classList.add("is-active");
+    elements.timerTitle.textContent = isEffective ? "这次活动已生效" : "保持活动";
+    elements.timerHint.textContent = isEffective
+      ? "已经超过 2 分钟，结束后会保存这次记录"
+      : `再坚持 ${formatTimer(MINIMUM_DURATION - elapsed)}，这次活动就生效`;
+  }
+
+  function startActivity() {
+    activeStart = Date.now();
+    saveActiveStart();
+    elements.activityButton.classList.add("is-stopping");
+    elements.activityButtonLabel.textContent = "结束活动";
+    updateTimer();
+    timerId = window.setInterval(updateTimer, 250);
+  }
+
+  function stopActivity() {
+    const endTime = Date.now();
+    const startTime = activeStart;
+    if (startTime === null) return;
+    const duration = endTime - startTime;
+
+    activeStart = null;
+    saveActiveStart();
+    window.clearInterval(timerId);
+    timerId = null;
+    resetTimerView();
+
+    if (duration < MINIMUM_DURATION) {
+      showToast(`本次只有 ${formatTimer(duration)}，未满 2 分钟，未计入记录`);
+      return;
+    }
+
+    records.push({
+      id: globalThis.crypto?.randomUUID?.() || `${endTime}-${Math.random().toString(16).slice(2)}`,
+      startTime,
+      endTime,
+      duration
+    });
+    saveRecords();
+    scheduleDailyReminder();
+    if (reminder !== null) {
+      stopReminder(false);
+      showToast(`活动已生效，提醒已取消 · ${formatDuration(duration)}`);
+    } else {
+      showToast(`记录成功：${formatDuration(duration)}`);
+    }
+    renderAll();
+  }
+
+  function formatCountdown(milliseconds) {
+    const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  function updateReminder() {
+    if (reminder === null) {
+      elements.reminderCountdown.textContent = "--:--";
+      return;
+    }
+
+    const remaining = reminder.deadline - Date.now();
+    if (remaining <= 0) {
+      triggerAlarm();
+      return;
+    }
+
+    elements.reminderCountdown.textContent = formatCountdown(remaining);
+    elements.reminderStatus.textContent = "倒计时中";
+    elements.reminderStatus.classList.add("is-active");
+    elements.reminderHint.textContent = "完成一次满 2 分钟的有效活动，提醒会自动取消";
+    elements.reminderButton.textContent = "取消倒计时";
+    elements.reminderButton.classList.add("is-active");
+    elements.reminderButton.classList.remove("is-ringing");
+    setReminderControlsDisabled(true);
+  }
+
+  function setReminderControlsDisabled(disabled) {
+    elements.reminderOptions.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
+    elements.customMinutes.disabled = disabled;
+  }
+
+  async function primeAlarmAudio() {
+    try {
+      elements.alarmAudio.muted = true;
+      await elements.alarmAudio.play();
+      elements.alarmAudio.pause();
+      elements.alarmAudio.currentTime = 0;
+      elements.alarmAudio.muted = false;
+    } catch {
+      elements.alarmAudio.muted = false;
+    }
+  }
+
+  async function requestWakeLock() {
+    if (wakeLock !== null || !("wakeLock" in navigator) || document.hidden || reminder === null || reminder.ringing) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch {
+      wakeLock = null;
+    }
+  }
+
+  function startReminder() {
+    const customValue = Number(elements.customMinutes.value);
+    if (elements.customMinutes.value !== "" && (!Number.isFinite(customValue) || customValue < 1 || customValue > 180)) {
+      showToast("请输入 1–180 分钟");
+      elements.customMinutes.focus();
+      return;
+    }
+
+    const duration = elements.customMinutes.value === "" ? selectedReminderDuration : customValue * 60_000;
+    const durationLabel = duration < 60_000 ? `${duration / 1000} 秒测试` : `${duration / 60_000} 分钟`;
+
+    primeAlarmAudio();
+    reminder = { deadline: Date.now() + duration, ringing: false };
+    saveReminder();
+    requestWakeLock();
+    updateReminder();
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = window.setInterval(updateReminder, 250);
+    showToast(`已设置 ${durationLabel}活动提醒`);
+  }
+
+  function triggerAlarm() {
+    if (reminder === null) return;
+    if (!reminder.ringing) {
+      reminder.ringing = true;
+      saveReminder();
+    }
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = null;
+    if (wakeLock !== null) wakeLock.release().catch(() => {});
+    elements.reminderCountdown.textContent = "00:00";
+    elements.reminderStatus.textContent = "正在响铃";
+    elements.reminderStatus.classList.add("is-active");
+    elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
+    elements.reminderButton.textContent = "停止闹钟";
+    elements.alarmPlayButton.hidden = true;
+    elements.reminderButton.classList.remove("is-active");
+    elements.reminderButton.classList.add("is-ringing");
+    setReminderControlsDisabled(true);
+    elements.alarmAudio.play().catch(() => {
+      elements.reminderHint.textContent = "浏览器阻止了自动播放，请点下面的按钮播放闹钟";
+      elements.alarmPlayButton.hidden = false;
+    });
+  }
+
+  function stopReminder(showMessage = true) {
+    const wasRinging = Boolean(reminder?.ringing);
+    reminder = null;
+    saveReminder();
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = null;
+    if (wakeLock !== null) wakeLock.release().catch(() => {});
+    elements.alarmAudio.pause();
+    elements.alarmAudio.currentTime = 0;
+    elements.reminderCountdown.textContent = "--:--";
+    elements.reminderStatus.textContent = "未设置";
+    elements.reminderStatus.classList.remove("is-active");
+    elements.reminderHint.textContent = "到时间仍未完成有效活动，就会响起闹钟";
+    elements.reminderButton.textContent = "启动倒计时";
+    elements.alarmPlayButton.hidden = true;
+    elements.reminderButton.classList.remove("is-active", "is-ringing");
+    setReminderControlsDisabled(false);
+    if (showMessage) showToast(wasRinging ? "闹钟已停止" : "倒计时已取消");
+  }
+
+  function resetTimerView() {
+    elements.timerTitle.textContent = "准备好了吗？";
+    elements.statusPill.textContent = "未开始";
+    elements.statusPill.classList.remove("is-active");
+    elements.timerHint.textContent = "连续活动满 2 分钟，才会计入记录";
+    elements.activityButton.classList.remove("is-stopping");
+    elements.activityButtonLabel.textContent = "开始活动";
+    updateTimer();
+  }
+
+  function renderHistory() {
+    elements.clearButton.hidden = records.length === 0;
+    if (records.length === 0) {
+      elements.historyList.innerHTML = `
+        <div class="empty-state">
+          <strong>还没有有效活动</strong>
+          <p>完成一次不少于 2 分钟的活动后，记录会出现在这里。</p>
+        </div>`;
+      return;
+    }
+
+    elements.historyList.replaceChildren(...[...records]
+      .sort((a, b) => b.endTime - a.endTime)
+      .map((record) => {
+        const item = document.createElement("article");
+        item.className = "history-item";
+        item.innerHTML = `
+          <div class="history-main">
+            <span class="history-dot" aria-hidden="true"></span>
+            <div class="history-copy">
+              <strong>有效活动</strong>
+              <time datetime="${new Date(record.endTime).toISOString()}">${formatRecordTime(record)}</time>
+            </div>
+          </div>
+          <div class="history-actions">
+            <span class="duration-badge">${formatDuration(record.duration)}</span>
+            <button class="delete-button" type="button" aria-label="删除这条活动记录" data-delete-id="${record.id}">×</button>
+          </div>`;
+        return item;
+      }));
+  }
+
+  function renderAll() {
+    updateToday();
+    renderHistory();
+  }
+
+  function deleteRecord(id) {
+    records = records.filter((record) => record.id !== id);
+    saveRecords();
+    renderAll();
+    showToast("已删除这条记录");
+  }
+
+  function clearRecords() {
+    records = [];
+    saveRecords();
+    renderAll();
+    showToast("所有记录已清空");
+  }
+
+  function showToast(message) {
+    window.clearTimeout(toastTimer);
+    elements.toast.textContent = message;
+    elements.toast.classList.add("is-visible");
+    toastTimer = window.setTimeout(() => elements.toast.classList.remove("is-visible"), 3200);
+  }
+
+  function initialize() {
+    elements.todayLabel.textContent = new Intl.DateTimeFormat("zh-CN", {
+      month: "long", day: "numeric", weekday: "long"
+    }).format(new Date());
+
+    elements.activityButton.addEventListener("click", () => {
+      if (activeStart === null) startActivity();
+      else stopActivity();
+    });
+
+    elements.historyList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-id]");
+      if (button) deleteRecord(button.dataset.deleteId);
+    });
+
+    elements.clearButton.addEventListener("click", () => elements.confirmDialog.showModal());
+    elements.confirmDialog.addEventListener("close", () => {
+      if (elements.confirmDialog.returnValue === "confirm") clearRecords();
+    });
+
+    elements.reminderOptions.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-minutes], [data-seconds]");
+      if (!button || reminder !== null) return;
+      selectedReminderDuration = button.dataset.seconds
+        ? Number(button.dataset.seconds) * 1000
+        : Number(button.dataset.minutes) * 60_000;
+      elements.customMinutes.value = "";
+      elements.reminderOptions.querySelectorAll("[data-minutes], [data-seconds]").forEach((chip) => {
+        chip.classList.toggle("is-selected", chip === button);
+      });
+    });
+
+    elements.customMinutes.addEventListener("input", () => {
+      elements.reminderOptions.querySelectorAll("[data-minutes], [data-seconds]").forEach((chip) => chip.classList.remove("is-selected"));
+    });
+
+    elements.reminderButton.addEventListener("click", () => {
+      if (reminder === null) startReminder();
+      else stopReminder();
+    });
+
+    elements.alarmPlayButton.addEventListener("click", () => {
+      elements.alarmAudio.play().then(() => {
+        elements.alarmPlayButton.hidden = true;
+        elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
+      }).catch(() => showToast("无法播放，请检查手机媒体音量"));
+    });
+
+    elements.dailyReminderButton.addEventListener("click", toggleDailyReminder);
+    elements.dailyReminderTestButton.addEventListener("click", testDailyReminder);
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        updateTimer();
+        updateToday();
+        requestWakeLock();
+        scheduleDailyReminder();
+      }
+    });
+
+    renderAll();
+    scheduleDailyReminder();
+    if (activeStart !== null) {
+      elements.activityButton.classList.add("is-stopping");
+      elements.activityButtonLabel.textContent = "结束活动";
+      updateTimer();
+      timerId = window.setInterval(updateTimer, 250);
+    } else {
+      resetTimerView();
+    }
+
+    if (reminder !== null) {
+      if (reminder.ringing || reminder.deadline <= Date.now()) triggerAlarm();
+      else {
+        updateReminder();
+        requestWakeLock();
+        reminderTimerId = window.setInterval(updateReminder, 250);
+      }
+    }
+  }
+
+  initialize();
+})();
+
+    </script>
   </body>
 </html>
