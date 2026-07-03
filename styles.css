@@ -172,6 +172,90 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 .is-stopping .action-icon { border-radius: 3px; background: var(--ink); }
 
 .history-section { margin-top: 34px; }
+
+.reminder-card {
+  margin-top: 14px;
+  padding: 23px;
+  border: 1px solid rgba(21, 32, 25, 0.08);
+  border-radius: 28px;
+  background: #ece8dc;
+}
+
+.reminder-countdown {
+  margin: 25px 0 6px;
+  font-size: 3.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  text-align: center;
+}
+
+.reminder-hint {
+  min-height: 38px;
+  margin: 12px 0 18px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.reminder-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+
+.time-chip {
+  min-height: 39px;
+  padding: 5px;
+  border: 1px solid #d0ccc1;
+  border-radius: 11px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.56);
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.time-chip.is-selected { color: var(--ink); border-color: var(--ink); background: var(--lime); }
+.time-chip--test { color: var(--danger); border-color: rgba(186, 62, 53, 0.35); }
+
+.custom-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.custom-time label { color: var(--ink); font-weight: 750; }
+.custom-time input {
+  min-width: 0;
+  flex: 1;
+  height: 40px;
+  border: 1px solid #d0ccc1;
+  border-radius: 11px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.reminder-action {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 14px;
+  border: 1px solid var(--ink);
+  border-radius: 15px;
+  color: var(--ink);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.reminder-action.is-active { color: white; background: var(--ink); }
+.reminder-action.is-ringing { color: var(--ink); border-color: var(--lime-dark); background: var(--lime); }
+.reminder-action--sound { margin-top: 8px; color: white; border-color: var(--danger); background: var(--danger); }
+
 .section-heading { margin-bottom: 15px; }
 .text-button { border: 0; padding: 8px; color: var(--danger); background: transparent; font-size: 0.8rem; font-weight: 700; cursor: pointer; }
 .history-list { display: grid; gap: 10px; }
@@ -234,6 +318,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   .summary-card { min-height: 140px; padding: 16px; }
   .timer-card { padding: 20px; }
   .history-copy time { font-size: 0.66rem; }
+  .reminder-card { padding: 20px; }
+  .reminder-options { grid-template-columns: repeat(2, 1fr); }
+  .time-chip--test { grid-column: span 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {

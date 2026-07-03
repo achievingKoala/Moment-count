@@ -54,6 +54,36 @@
         </button>
       </section>
 
+      <section class="reminder-card" aria-labelledby="reminderTitle">
+        <div class="timer-heading">
+          <div>
+            <p class="eyebrow">ACTIVITY REMINDER</p>
+            <h2 id="reminderTitle">活动提醒</h2>
+          </div>
+          <span class="status-pill" id="reminderStatus">未设置</span>
+        </div>
+
+        <div class="reminder-countdown" id="reminderCountdown">--:--</div>
+        <p class="reminder-hint" id="reminderHint">到时间仍未完成有效活动，就会响起闹钟</p>
+
+        <div class="reminder-options" id="reminderOptions" aria-label="选择倒计时时长">
+          <button type="button" class="time-chip time-chip--test" data-seconds="10">10 秒测试</button>
+          <button type="button" class="time-chip" data-minutes="5">5 分钟</button>
+          <button type="button" class="time-chip is-selected" data-minutes="10">10 分钟</button>
+          <button type="button" class="time-chip" data-minutes="15">15 分钟</button>
+          <button type="button" class="time-chip" data-minutes="30">30 分钟</button>
+        </div>
+
+        <div class="custom-time">
+          <label for="customMinutes">自定义</label>
+          <input id="customMinutes" type="number" inputmode="numeric" min="1" max="180" placeholder="分钟" aria-label="自定义倒计时分钟数" />
+          <span>分钟</span>
+        </div>
+
+        <button class="reminder-action" id="reminderButton" type="button">启动倒计时</button>
+        <button class="reminder-action reminder-action--sound" id="alarmPlayButton" type="button" hidden>播放闹钟声音</button>
+      </section>
+
       <section class="history-section" aria-labelledby="historyTitle">
         <div class="section-heading">
           <div>
@@ -67,6 +97,7 @@
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <audio id="alarmAudio" src="alarm-clock.mp3" preload="auto" loop></audio>
 
     <dialog class="confirm-dialog" id="confirmDialog">
       <form method="dialog">

@@ -4,6 +4,7 @@
   const MINIMUM_DURATION = 120_000;
   const RECORDS_KEY = "move-two-minutes.records.v1";
   const ACTIVE_KEY = "move-two-minutes.active.v1";
+  const REMINDER_KEY = "move-two-minutes.reminder.v1";
 
   const elements = {
     todayLabel: document.querySelector("#todayLabel"),
@@ -19,13 +20,25 @@
     historyList: document.querySelector("#historyList"),
     clearButton: document.querySelector("#clearButton"),
     confirmDialog: document.querySelector("#confirmDialog"),
-    toast: document.querySelector("#toast")
+    toast: document.querySelector("#toast"),
+    reminderStatus: document.querySelector("#reminderStatus"),
+    reminderCountdown: document.querySelector("#reminderCountdown"),
+    reminderHint: document.querySelector("#reminderHint"),
+    reminderOptions: document.querySelector("#reminderOptions"),
+    customMinutes: document.querySelector("#customMinutes"),
+    reminderButton: document.querySelector("#reminderButton"),
+    alarmPlayButton: document.querySelector("#alarmPlayButton"),
+    alarmAudio: document.querySelector("#alarmAudio")
   };
 
   let records = readRecords();
   let activeStart = readActiveStart();
   let timerId = null;
   let toastTimer = null;
+  let reminder = readReminder();
+  let reminderTimerId = null;
+  let selectedReminderDuration = 10 * 60_000;
+  let wakeLock = null;
 
   function safeParse(key, fallback) {
     try {
@@ -49,6 +62,17 @@
   function readActiveStart() {
     const value = safeParse(ACTIVE_KEY, null);
     return Number.isFinite(value) && value > 0 && value <= Date.now() ? value : null;
+  }
+
+  function readReminder() {
+    const value = safeParse(REMINDER_KEY, null);
+    if (!value || !Number.isFinite(value.deadline) || value.deadline <= 0) return null;
+    return { deadline: value.deadline, ringing: Boolean(value.ringing) };
+  }
+
+  function saveReminder() {
+    if (reminder === null) localStorage.removeItem(REMINDER_KEY);
+    else localStorage.setItem(REMINDER_KEY, JSON.stringify(reminder));
   }
 
   function saveRecords() {
@@ -160,8 +184,135 @@
       duration
     });
     saveRecords();
+    if (reminder !== null) {
+      stopReminder(false);
+      showToast(`活动已生效，提醒已取消 · ${formatDuration(duration)}`);
+    } else {
+      showToast(`记录成功：${formatDuration(duration)}`);
+    }
     renderAll();
-    showToast(`记录成功：${formatDuration(duration)}`);
+  }
+
+  function formatCountdown(milliseconds) {
+    const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  function updateReminder() {
+    if (reminder === null) {
+      elements.reminderCountdown.textContent = "--:--";
+      return;
+    }
+
+    const remaining = reminder.deadline - Date.now();
+    if (remaining <= 0) {
+      triggerAlarm();
+      return;
+    }
+
+    elements.reminderCountdown.textContent = formatCountdown(remaining);
+    elements.reminderStatus.textContent = "倒计时中";
+    elements.reminderStatus.classList.add("is-active");
+    elements.reminderHint.textContent = "完成一次满 2 分钟的有效活动，提醒会自动取消";
+    elements.reminderButton.textContent = "取消倒计时";
+    elements.reminderButton.classList.add("is-active");
+    elements.reminderButton.classList.remove("is-ringing");
+    setReminderControlsDisabled(true);
+  }
+
+  function setReminderControlsDisabled(disabled) {
+    elements.reminderOptions.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
+    elements.customMinutes.disabled = disabled;
+  }
+
+  async function primeAlarmAudio() {
+    try {
+      elements.alarmAudio.muted = true;
+      await elements.alarmAudio.play();
+      elements.alarmAudio.pause();
+      elements.alarmAudio.currentTime = 0;
+      elements.alarmAudio.muted = false;
+    } catch {
+      elements.alarmAudio.muted = false;
+    }
+  }
+
+  async function requestWakeLock() {
+    if (wakeLock !== null || !("wakeLock" in navigator) || document.hidden || reminder === null || reminder.ringing) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch {
+      wakeLock = null;
+    }
+  }
+
+  function startReminder() {
+    const customValue = Number(elements.customMinutes.value);
+    if (elements.customMinutes.value !== "" && (!Number.isFinite(customValue) || customValue < 1 || customValue > 180)) {
+      showToast("请输入 1–180 分钟");
+      elements.customMinutes.focus();
+      return;
+    }
+
+    const duration = elements.customMinutes.value === "" ? selectedReminderDuration : customValue * 60_000;
+    const durationLabel = duration < 60_000 ? `${duration / 1000} 秒测试` : `${duration / 60_000} 分钟`;
+
+    primeAlarmAudio();
+    reminder = { deadline: Date.now() + duration, ringing: false };
+    saveReminder();
+    requestWakeLock();
+    updateReminder();
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = window.setInterval(updateReminder, 250);
+    showToast(`已设置 ${durationLabel}活动提醒`);
+  }
+
+  function triggerAlarm() {
+    if (reminder === null) return;
+    if (!reminder.ringing) {
+      reminder.ringing = true;
+      saveReminder();
+    }
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = null;
+    if (wakeLock !== null) wakeLock.release().catch(() => {});
+    elements.reminderCountdown.textContent = "00:00";
+    elements.reminderStatus.textContent = "正在响铃";
+    elements.reminderStatus.classList.add("is-active");
+    elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
+    elements.reminderButton.textContent = "停止闹钟";
+    elements.alarmPlayButton.hidden = true;
+    elements.reminderButton.classList.remove("is-active");
+    elements.reminderButton.classList.add("is-ringing");
+    setReminderControlsDisabled(true);
+    elements.alarmAudio.play().catch(() => {
+      elements.reminderHint.textContent = "浏览器阻止了自动播放，请点下面的按钮播放闹钟";
+      elements.alarmPlayButton.hidden = false;
+    });
+  }
+
+  function stopReminder(showMessage = true) {
+    const wasRinging = Boolean(reminder?.ringing);
+    reminder = null;
+    saveReminder();
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = null;
+    if (wakeLock !== null) wakeLock.release().catch(() => {});
+    elements.alarmAudio.pause();
+    elements.alarmAudio.currentTime = 0;
+    elements.reminderCountdown.textContent = "--:--";
+    elements.reminderStatus.textContent = "未设置";
+    elements.reminderStatus.classList.remove("is-active");
+    elements.reminderHint.textContent = "到时间仍未完成有效活动，就会响起闹钟";
+    elements.reminderButton.textContent = "启动倒计时";
+    elements.alarmPlayButton.hidden = true;
+    elements.reminderButton.classList.remove("is-active", "is-ringing");
+    setReminderControlsDisabled(false);
+    if (showMessage) showToast(wasRinging ? "闹钟已停止" : "倒计时已取消");
   }
 
   function resetTimerView() {
@@ -252,10 +403,39 @@
       if (elements.confirmDialog.returnValue === "confirm") clearRecords();
     });
 
+    elements.reminderOptions.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-minutes], [data-seconds]");
+      if (!button || reminder !== null) return;
+      selectedReminderDuration = button.dataset.seconds
+        ? Number(button.dataset.seconds) * 1000
+        : Number(button.dataset.minutes) * 60_000;
+      elements.customMinutes.value = "";
+      elements.reminderOptions.querySelectorAll("[data-minutes], [data-seconds]").forEach((chip) => {
+        chip.classList.toggle("is-selected", chip === button);
+      });
+    });
+
+    elements.customMinutes.addEventListener("input", () => {
+      elements.reminderOptions.querySelectorAll("[data-minutes], [data-seconds]").forEach((chip) => chip.classList.remove("is-selected"));
+    });
+
+    elements.reminderButton.addEventListener("click", () => {
+      if (reminder === null) startReminder();
+      else stopReminder();
+    });
+
+    elements.alarmPlayButton.addEventListener("click", () => {
+      elements.alarmAudio.play().then(() => {
+        elements.alarmPlayButton.hidden = true;
+        elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
+      }).catch(() => showToast("无法播放，请检查手机媒体音量"));
+    });
+
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         updateTimer();
         updateToday();
+        requestWakeLock();
       }
     });
 
@@ -267,6 +447,15 @@
       timerId = window.setInterval(updateTimer, 250);
     } else {
       resetTimerView();
+    }
+
+    if (reminder !== null) {
+      if (reminder.ringing || reminder.deadline <= Date.now()) triggerAlarm();
+      else {
+        updateReminder();
+        requestWakeLock();
+        reminderTimerId = window.setInterval(updateReminder, 250);
+      }
     }
   }
 
