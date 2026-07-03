@@ -453,8 +453,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       <section class="history-section" aria-labelledby="historyTitle">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">ACTIVITY LOG</p>
-            <h2 id="historyTitle">活动记录</h2>
+            <p class="eyebrow">HOURLY ACTIVITY</p>
+            <h2 id="historyTitle">每小时活动统计</h2>
           </div>
           <button class="text-button" id="clearButton" type="button" hidden>清空</button>
         </div>
@@ -704,14 +704,31 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       date.getDate() === other.getDate();
   }
 
-  function formatRecordTime(record) {
-    const end = new Date(record.endTime);
-    const datePart = isSameLocalDay(record.endTime)
+  function hourlyKey(timestamp) {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}`;
+  }
+
+  function formatHourlyTime(timestamp) {
+    const end = new Date(timestamp);
+    const datePart = isSameLocalDay(timestamp)
       ? "今天"
       : end.toLocaleDateString("zh-CN", { month: "long", day: "numeric" });
-    const startTime = new Date(record.startTime).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-    const endTime = end.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-    return `${datePart} · ${startTime}–${endTime}`;
+    const hour = end.getHours();
+    return `${datePart} · ${pad(hour)}:00–${pad(hour)}:59`;
+  }
+
+  function groupRecordsByHour() {
+    const groups = new Map();
+    records.forEach((record) => {
+      const key = hourlyKey(record.endTime);
+      const group = groups.get(key) || { key, timestamp: record.endTime, count: 0, duration: 0 };
+      group.count += 1;
+      group.duration += record.duration;
+      group.timestamp = Math.max(group.timestamp, record.endTime);
+      groups.set(key, group);
+    });
+    return [...groups.values()].sort((a, b) => b.timestamp - a.timestamp);
   }
 
   function updateToday() {
@@ -924,27 +941,26 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       elements.historyList.innerHTML = `
         <div class="empty-state">
           <strong>还没有有效活动</strong>
-          <p>完成一次不少于 2 分钟的活动后，记录会出现在这里。</p>
+          <p>完成一次不少于 2 分钟的活动后，这里会按小时统计次数。</p>
         </div>`;
       return;
     }
 
-    elements.historyList.replaceChildren(...[...records]
-      .sort((a, b) => b.endTime - a.endTime)
-      .map((record) => {
+    elements.historyList.replaceChildren(...groupRecordsByHour()
+      .map((group) => {
         const item = document.createElement("article");
         item.className = "history-item";
         item.innerHTML = `
           <div class="history-main">
             <span class="history-dot" aria-hidden="true"></span>
             <div class="history-copy">
-              <strong>有效活动</strong>
-              <time datetime="${new Date(record.endTime).toISOString()}">${formatRecordTime(record)}</time>
+              <strong>${group.count} 次有效活动</strong>
+              <time datetime="${new Date(group.timestamp).toISOString()}">${formatHourlyTime(group.timestamp)}</time>
             </div>
           </div>
           <div class="history-actions">
-            <span class="duration-badge">${formatDuration(record.duration)}</span>
-            <button class="delete-button" type="button" aria-label="删除这条活动记录" data-delete-id="${record.id}">×</button>
+            <span class="duration-badge">共 ${formatDuration(group.duration)}</span>
+            <button class="delete-button" type="button" aria-label="删除这个小时的活动记录" data-delete-hour="${group.key}">×</button>
           </div>`;
         return item;
       }));
@@ -955,11 +971,11 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     renderHistory();
   }
 
-  function deleteRecord(id) {
-    records = records.filter((record) => record.id !== id);
+  function deleteHourlyRecords(key) {
+    records = records.filter((record) => hourlyKey(record.endTime) !== key);
     saveRecords();
     renderAll();
-    showToast("已删除这条记录");
+    showToast("已删除这个小时的活动记录");
   }
 
   function clearRecords() {
@@ -987,8 +1003,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     });
 
     elements.historyList.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-delete-id]");
-      if (button) deleteRecord(button.dataset.deleteId);
+      const button = event.target.closest("[data-delete-hour]");
+      if (button) deleteHourlyRecords(button.dataset.deleteHour);
     });
 
     elements.clearButton.addEventListener("click", () => elements.confirmDialog.showModal());
