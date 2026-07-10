@@ -616,6 +616,24 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     dailyReminderTimerId = window.setTimeout(fireDailyReminder, Math.min(delay, 2_147_000_000));
   }
 
+  function isLocalRun() {
+    return window.location.protocol === "file:";
+  }
+
+  async function requestNotificationPermission() {
+    if (isLocalRun()) return "local";
+    if (!("Notification" in window)) return "unsupported";
+    if (Notification.permission !== "default") return Notification.permission;
+    return Notification.requestPermission();
+  }
+
+  function showActivityNotification(title = "该站起来啦") {
+    if (isLocalRun()) return false;
+    if (!("Notification" in window) || Notification.permission !== "granted") return false;
+    new Notification(title, { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+    return true;
+  }
+
   function fireDailyReminder() {
     if (dailyReminder === null) return;
     const today = localDateKey();
@@ -624,9 +642,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       saveDailyReminder();
       showToast("该站起来活动两分钟啦");
       elements.alarmAudio.play().catch(() => {});
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("该站起来啦", { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
-      }
+      showActivityNotification();
     }
     scheduleDailyReminder();
   }
@@ -639,9 +655,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       showToast("每日提醒已关闭");
       return;
     }
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
+    await requestNotificationPermission();
     dailyReminder = { time: elements.dailyReminderTime.value || "10:00", lastNotifiedDate: null };
     saveDailyReminder();
     primeAlarmAudio();
@@ -651,9 +665,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   async function testDailyReminder() {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
+    await requestNotificationPermission();
 
     showToast("该站起来活动两分钟啦");
     const previewAudio = new Audio(elements.alarmAudio.currentSrc || elements.alarmAudio.src);
@@ -663,9 +675,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       previewAudio.currentTime = 0;
     }, 3000);
 
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("该站起来啦", { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
-    }
+    showActivityNotification();
   }
 
   function saveRecords() {
@@ -861,7 +871,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     }
   }
 
-  function startReminder() {
+  async function startReminder() {
     const customValue = Number(elements.customMinutes.value);
     if (elements.customMinutes.value !== "" && (!Number.isFinite(customValue) || customValue < 1 || customValue > 180)) {
       showToast("请输入 1–180 分钟");
@@ -872,6 +882,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     const duration = elements.customMinutes.value === "" ? selectedReminderDuration : customValue * 60_000;
     const durationLabel = duration < 60_000 ? `${duration / 1000} 秒测试` : `${duration / 60_000} 分钟`;
 
+    await requestNotificationPermission();
     primeAlarmAudio();
     reminder = { deadline: Date.now() + duration, ringing: false };
     saveReminder();
@@ -900,6 +911,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.reminderButton.classList.remove("is-active");
     elements.reminderButton.classList.add("is-ringing");
     setReminderControlsDisabled(true);
+    showActivityNotification("活动提醒时间到");
     elements.alarmAudio.play().catch(() => {
       elements.reminderHint.textContent = "浏览器阻止了自动播放，请点下面的按钮播放闹钟";
       elements.alarmPlayButton.hidden = false;
