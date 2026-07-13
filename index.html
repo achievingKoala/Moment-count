@@ -404,7 +404,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         <article class="summary-card summary-card--dark">
           <span>今日活动</span>
           <strong id="todayCount">0</strong>
-          <small>次有效记录</small>
+          <small id="todayGoal">目标 8 次，还差 8 次</small>
         </article>
         <article class="summary-card summary-card--lime">
           <span>累计时长</span>
@@ -513,11 +513,13 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   const REMINDER_KEY = "move-two-minutes.reminder.v1";
   const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
   const COUNTDOWN_HIDDEN_KEY = "move-two-minutes.countdown-hidden.v1";
+  const DAILY_TARGET_COUNT = 8;
   const HOURLY_REMINDER_MINUTE = 50;
 
   const elements = {
     todayLabel: document.querySelector("#todayLabel"),
     todayCount: document.querySelector("#todayCount"),
+    todayGoal: document.querySelector("#todayGoal"),
     todayDuration: document.querySelector("#todayDuration"),
     timerTitle: document.querySelector("#timerTitle"),
     timerDisplay: document.querySelector("#timerDisplay"),
@@ -794,6 +796,10 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     const todayRecords = records.filter((record) => isSameLocalDay(record.endTime));
     const total = todayRecords.reduce((sum, record) => sum + record.duration, 0);
     elements.todayCount.textContent = String(todayRecords.length);
+    const remaining = Math.max(0, DAILY_TARGET_COUNT - todayRecords.length);
+    elements.todayGoal.textContent = remaining === 0
+      ? `今日目标已达成 · ${DAILY_TARGET_COUNT} 次`
+      : `目标 ${DAILY_TARGET_COUNT} 次，还差 ${remaining} 次`;
     const totalMinutes = Math.floor(total / 60_000);
     elements.todayDuration.innerHTML = totalMinutes >= 60
       ? `${(totalMinutes / 60).toFixed(totalMinutes % 60 === 0 ? 0 : 1)}<small>小时</small>`
