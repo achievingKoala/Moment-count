@@ -191,6 +191,39 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   background: #ece8dc;
 }
 
+.reminder-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.text-toggle {
+  min-height: 30px;
+  border: 1px solid #d0ccc1;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.42);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.text-toggle.is-active {
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--lime);
+}
+
+.reminder-card.is-countdown-hidden .reminder-countdown,
+.reminder-card.is-countdown-hidden .reminder-hint,
+.reminder-card.is-countdown-hidden .reminder-options,
+.reminder-card.is-countdown-hidden .custom-time,
+.reminder-card.is-countdown-hidden #reminderButton,
+.reminder-card.is-countdown-hidden #alarmPlayButton {
+  display: none;
+}
+
 .reminder-countdown {
   margin: 25px 0 6px;
   font-size: 3.15rem;
@@ -401,13 +434,16 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         </button>
       </section>
 
-      <section class="reminder-card" aria-labelledby="reminderTitle">
+      <section class="reminder-card" id="reminderCard" aria-labelledby="reminderTitle">
         <div class="timer-heading">
           <div>
             <p class="eyebrow">ACTIVITY REMINDER</p>
             <h2 id="reminderTitle">活动提醒</h2>
           </div>
-          <span class="status-pill" id="reminderStatus">未设置</span>
+          <div class="reminder-tools">
+            <button class="text-toggle" id="countdownModeToggle" type="button">隐藏倒计时</button>
+            <span class="status-pill" id="reminderStatus">未设置</span>
+          </div>
         </div>
 
         <div class="reminder-countdown" id="reminderCountdown">--:--</div>
@@ -476,6 +512,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   const ACTIVE_KEY = "move-two-minutes.active.v1";
   const REMINDER_KEY = "move-two-minutes.reminder.v1";
   const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
+  const COUNTDOWN_HIDDEN_KEY = "move-two-minutes.countdown-hidden.v1";
   const HOURLY_REMINDER_MINUTE = 50;
 
   const elements = {
@@ -493,6 +530,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     clearButton: document.querySelector("#clearButton"),
     confirmDialog: document.querySelector("#confirmDialog"),
     toast: document.querySelector("#toast"),
+    reminderCard: document.querySelector("#reminderCard"),
+    countdownModeToggle: document.querySelector("#countdownModeToggle"),
     reminderStatus: document.querySelector("#reminderStatus"),
     reminderCountdown: document.querySelector("#reminderCountdown"),
     reminderHint: document.querySelector("#reminderHint"),
@@ -516,6 +555,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   let wakeLock = null;
   let dailyReminder = readDailyReminder();
   let dailyReminderTimerId = null;
+  let countdownModeHidden = readCountdownModeHidden();
 
   function safeParse(key, fallback) {
     try {
@@ -561,6 +601,31 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   function saveDailyReminder() {
     if (dailyReminder === null) localStorage.removeItem(DAILY_REMINDER_KEY);
     else localStorage.setItem(DAILY_REMINDER_KEY, JSON.stringify(dailyReminder));
+  }
+
+  function readCountdownModeHidden() {
+    return localStorage.getItem(COUNTDOWN_HIDDEN_KEY) === "true";
+  }
+
+  function saveCountdownModeHidden() {
+    localStorage.setItem(COUNTDOWN_HIDDEN_KEY, countdownModeHidden ? "true" : "false");
+  }
+
+  function renderCountdownMode() {
+    const isHidden = countdownModeHidden && reminder === null;
+    elements.reminderCard.classList.toggle("is-countdown-hidden", isHidden);
+    elements.countdownModeToggle.textContent = isHidden ? "显示倒计时" : "隐藏倒计时";
+    elements.countdownModeToggle.classList.toggle("is-active", isHidden);
+  }
+
+  function toggleCountdownMode() {
+    if (reminder !== null) {
+      showToast("请先取消当前倒计时");
+      return;
+    }
+    countdownModeHidden = !countdownModeHidden;
+    saveCountdownModeHidden();
+    renderCountdownMode();
   }
 
   function hasActivityThisHour(comparison = Date.now()) {
@@ -806,6 +871,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   function updateReminder() {
+    renderCountdownMode();
     if (reminder === null) {
       elements.reminderCountdown.textContent = "--:--";
       return;
@@ -870,6 +936,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     reminder = { deadline: Date.now() + duration, ringing: false };
     saveReminder();
     requestWakeLock();
+    renderCountdownMode();
     updateReminder();
     window.clearInterval(reminderTimerId);
     reminderTimerId = window.setInterval(updateReminder, 250);
@@ -918,6 +985,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.alarmPlayButton.hidden = true;
     elements.reminderButton.classList.remove("is-active", "is-ringing");
     setReminderControlsDisabled(false);
+    renderCountdownMode();
     if (showMessage) showToast(wasRinging ? "闹钟已停止" : "倒计时已取消");
   }
 
@@ -1029,6 +1097,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       else stopReminder();
     });
 
+    elements.countdownModeToggle.addEventListener("click", toggleCountdownMode);
+
     elements.alarmPlayButton.addEventListener("click", () => {
       elements.alarmAudio.play().then(() => {
         elements.alarmPlayButton.hidden = true;
@@ -1049,6 +1119,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     });
 
     renderAll();
+    renderCountdownMode();
     scheduleDailyReminder();
     if (activeStart !== null) {
       elements.activityButton.classList.add("is-stopping");
