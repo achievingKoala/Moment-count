@@ -278,16 +278,6 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
 .daily-reminder strong { font-size: 0.9rem; }
 .daily-reminder p { margin: 5px 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
-.daily-reminder input {
-  height: 42px;
-  border: 1px solid #d0ccc1;
-  border-radius: 11px;
-  padding: 0 10px;
-  color: var(--ink);
-  background: rgba(255,255,255,0.7);
-  font: inherit;
-  font-weight: 750;
-}
 .daily-reminder-button { grid-column: 1 / -1; margin-top: 0; }
 .daily-reminder-button.is-active { color: white; background: var(--ink); }
 .daily-reminder-test { grid-column: 1 / -1; margin-top: -4px; border-color: #aaa69b; color: var(--muted); }
@@ -442,11 +432,10 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
         <div class="daily-reminder">
           <div>
-            <strong>每天提醒我站起来</strong>
-            <p id="dailyReminderHint">当天完成一次有效活动后不再提醒</p>
+            <strong>每小时提醒我活动一次</strong>
+            <p id="dailyReminderHint">每小时 50 分检查，本小时完成一次有效活动后不再提醒</p>
           </div>
-          <input id="dailyReminderTime" type="time" value="10:00" aria-label="每日提醒时间" />
-          <button class="reminder-action daily-reminder-button" id="dailyReminderButton" type="button">开启每日提醒</button>
+          <button class="reminder-action daily-reminder-button" id="dailyReminderButton" type="button">开启每小时提醒</button>
           <button class="reminder-action daily-reminder-test" id="dailyReminderTestButton" type="button">测试提醒效果</button>
         </div>
       </section>
@@ -487,6 +476,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   const ACTIVE_KEY = "move-two-minutes.active.v1";
   const REMINDER_KEY = "move-two-minutes.reminder.v1";
   const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
+  const HOURLY_REMINDER_MINUTE = 50;
 
   const elements = {
     todayLabel: document.querySelector("#todayLabel"),
@@ -511,7 +501,6 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
     alarmAudio: document.querySelector("#alarmAudio"),
-    dailyReminderTime: document.querySelector("#dailyReminderTime"),
     dailyReminderButton: document.querySelector("#dailyReminderButton"),
     dailyReminderTestButton: document.querySelector("#dailyReminderTestButton"),
     dailyReminderHint: document.querySelector("#dailyReminderHint")
@@ -565,8 +554,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
   function readDailyReminder() {
     const value = safeParse(DAILY_REMINDER_KEY, null);
-    if (!value || typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)) return null;
-    return { time: value.time, lastNotifiedDate: typeof value.lastNotifiedDate === "string" ? value.lastNotifiedDate : null };
+    if (!value) return null;
+    return { lastNotifiedHour: typeof value.lastNotifiedHour === "string" ? value.lastNotifiedHour : null };
   }
 
   function saveDailyReminder() {
@@ -574,37 +563,31 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     else localStorage.setItem(DAILY_REMINDER_KEY, JSON.stringify(dailyReminder));
   }
 
-  function localDateKey(date = new Date()) {
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  }
-
-  function hasActivityToday() {
-    return records.some((record) => isSameLocalDay(record.endTime));
+  function hasActivityThisHour(comparison = Date.now()) {
+    const key = hourlyKey(comparison);
+    return records.some((record) => hourlyKey(record.endTime) === key);
   }
 
   function nextDailyReminderDate() {
-    const [hours, minutes] = dailyReminder.time.split(":").map(Number);
+    const now = new Date();
     const next = new Date();
-    next.setHours(hours, minutes, 0, 0);
-    if (next <= new Date() || dailyReminder.lastNotifiedDate === localDateKey()) next.setDate(next.getDate() + 1);
+    next.setMinutes(HOURLY_REMINDER_MINUTE, 0, 0);
+    if (next <= now) next.setHours(next.getHours() + 1);
     return next;
   }
 
   function renderDailyReminder() {
     if (dailyReminder === null) {
-      elements.dailyReminderButton.textContent = "开启每日提醒";
+      elements.dailyReminderButton.textContent = "开启每小时提醒";
       elements.dailyReminderButton.classList.remove("is-active");
-      elements.dailyReminderTime.disabled = false;
-      elements.dailyReminderHint.textContent = "当天完成一次有效活动后不再提醒";
+      elements.dailyReminderHint.textContent = "每小时 50 分检查，本小时完成一次有效活动后不再提醒";
       return;
     }
-    elements.dailyReminderTime.value = dailyReminder.time;
-    elements.dailyReminderTime.disabled = true;
-    elements.dailyReminderButton.textContent = "关闭每日提醒";
+    elements.dailyReminderButton.textContent = "关闭每小时提醒";
     elements.dailyReminderButton.classList.add("is-active");
-    elements.dailyReminderHint.textContent = hasActivityToday()
-      ? "今天已完成，明天继续提醒"
-      : `已开启，每天 ${dailyReminder.time} 提醒`;
+    elements.dailyReminderHint.textContent = hasActivityThisHour()
+      ? "本小时已完成，下个小时 50 分继续检查"
+      : "已开启，每小时 50 分提醒";
   }
 
   function scheduleDailyReminder() {
@@ -636,9 +619,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
   function fireDailyReminder() {
     if (dailyReminder === null) return;
-    const today = localDateKey();
-    if (!hasActivityToday() && dailyReminder.lastNotifiedDate !== today) {
-      dailyReminder.lastNotifiedDate = today;
+    const hour = hourlyKey(Date.now());
+    if (!hasActivityThisHour() && dailyReminder.lastNotifiedHour !== hour) {
+      dailyReminder.lastNotifiedHour = hour;
       saveDailyReminder();
       showToast("该站起来活动两分钟啦");
       elements.alarmAudio.play().catch(() => {});
@@ -652,16 +635,16 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       dailyReminder = null;
       saveDailyReminder();
       scheduleDailyReminder();
-      showToast("每日提醒已关闭");
+      showToast("每小时提醒已关闭");
       return;
     }
     await requestNotificationPermission();
-    dailyReminder = { time: elements.dailyReminderTime.value || "10:00", lastNotifiedDate: null };
+    dailyReminder = { lastNotifiedHour: null };
     saveDailyReminder();
     primeAlarmAudio();
     scheduleDailyReminder();
     const notificationsDenied = "Notification" in window && Notification.permission === "denied";
-    showToast(notificationsDenied ? "已开启；浏览器通知被关闭，请保持页面打开" : "每日提醒已开启");
+    showToast(notificationsDenied ? "已开启；浏览器通知被关闭，请保持页面打开" : "每小时提醒已开启");
   }
 
   async function testDailyReminder() {
