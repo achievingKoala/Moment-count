@@ -311,6 +311,29 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
 .daily-reminder strong { font-size: 0.9rem; }
 .daily-reminder p { margin: 5px 0 0; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+.hourly-minute-setting {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.hourly-minute-setting input {
+  width: 58px;
+  height: 34px;
+  border: 1px solid #d0ccc1;
+  border-radius: 10px;
+  padding: 0 9px;
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 .daily-reminder-button { grid-column: 1 / -1; margin-top: 0; }
 .daily-reminder-button.is-active { color: white; background: var(--ink); }
 .daily-reminder-test { grid-column: 1 / -1; margin-top: -4px; border-color: #aaa69b; color: var(--muted); }
@@ -469,7 +492,12 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         <div class="daily-reminder">
           <div>
             <strong>每小时提醒我活动一次</strong>
-            <p id="dailyReminderHint">每小时 50 分检查，本小时完成一次有效活动后不再提醒</p>
+            <p id="dailyReminderHint">每小时固定分钟检查，本小时完成一次有效活动后不再提醒</p>
+            <label class="hourly-minute-setting" for="hourlyReminderMinute">
+              每小时第
+              <input id="hourlyReminderMinute" type="number" inputmode="numeric" min="0" max="59" step="1" aria-label="每小时提醒分钟" />
+              分钟提醒
+            </label>
           </div>
           <button class="reminder-action daily-reminder-button" id="dailyReminderButton" type="button">开启每小时提醒</button>
           <button class="reminder-action daily-reminder-test" id="dailyReminderTestButton" type="button">测试提醒效果</button>
@@ -513,8 +541,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   const REMINDER_KEY = "move-two-minutes.reminder.v1";
   const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
   const COUNTDOWN_HIDDEN_KEY = "move-two-minutes.countdown-hidden.v1";
+  const HOURLY_REMINDER_MINUTE_KEY = "move-two-minutes.hourly-reminder-minute.v1";
   const DAILY_TARGET_COUNT = 8;
-  const HOURLY_REMINDER_MINUTE = 50;
+  const DEFAULT_HOURLY_REMINDER_MINUTE = 50;
 
   const elements = {
     todayLabel: document.querySelector("#todayLabel"),
@@ -542,6 +571,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
     alarmAudio: document.querySelector("#alarmAudio"),
+    hourlyReminderMinute: document.querySelector("#hourlyReminderMinute"),
     dailyReminderButton: document.querySelector("#dailyReminderButton"),
     dailyReminderTestButton: document.querySelector("#dailyReminderTestButton"),
     dailyReminderHint: document.querySelector("#dailyReminderHint")
@@ -558,6 +588,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   let dailyReminder = readDailyReminder();
   let dailyReminderTimerId = null;
   let countdownModeHidden = readCountdownModeHidden();
+  let hourlyReminderMinute = readHourlyReminderMinute();
 
   function safeParse(key, fallback) {
     try {
@@ -613,6 +644,16 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     localStorage.setItem(COUNTDOWN_HIDDEN_KEY, countdownModeHidden ? "true" : "false");
   }
 
+  function readHourlyReminderMinute() {
+    const value = Number(localStorage.getItem(HOURLY_REMINDER_MINUTE_KEY));
+    if (!Number.isInteger(value) || value < 0 || value > 59) return DEFAULT_HOURLY_REMINDER_MINUTE;
+    return value;
+  }
+
+  function saveHourlyReminderMinute() {
+    localStorage.setItem(HOURLY_REMINDER_MINUTE_KEY, String(hourlyReminderMinute));
+  }
+
   function renderCountdownMode() {
     const isHidden = countdownModeHidden && reminder === null;
     elements.reminderCard.classList.toggle("is-countdown-hidden", isHidden);
@@ -635,26 +676,31 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     return records.some((record) => hourlyKey(record.endTime) === key);
   }
 
+  function formatHourlyReminderMinute() {
+    return `${hourlyReminderMinute} 分`;
+  }
+
   function nextDailyReminderDate() {
     const now = new Date();
     const next = new Date();
-    next.setMinutes(HOURLY_REMINDER_MINUTE, 0, 0);
+    next.setMinutes(hourlyReminderMinute, 0, 0);
     if (next <= now) next.setHours(next.getHours() + 1);
     return next;
   }
 
   function renderDailyReminder() {
+    elements.hourlyReminderMinute.value = String(hourlyReminderMinute);
     if (dailyReminder === null) {
       elements.dailyReminderButton.textContent = "开启每小时提醒";
       elements.dailyReminderButton.classList.remove("is-active");
-      elements.dailyReminderHint.textContent = "每小时 50 分检查，本小时完成一次有效活动后不再提醒";
+      elements.dailyReminderHint.textContent = `每小时 ${formatHourlyReminderMinute()}检查，本小时完成一次有效活动后不再提醒`;
       return;
     }
     elements.dailyReminderButton.textContent = "关闭每小时提醒";
     elements.dailyReminderButton.classList.add("is-active");
     elements.dailyReminderHint.textContent = hasActivityThisHour()
-      ? "本小时已完成，下个小时 50 分继续检查"
-      : "已开启，每小时 50 分提醒";
+      ? `本小时已完成，下个小时 ${formatHourlyReminderMinute()}继续检查`
+      : `已开启，每小时 ${formatHourlyReminderMinute()}提醒`;
   }
 
   function scheduleDailyReminder() {
@@ -726,6 +772,20 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     }, 3000);
 
     showActivityNotification();
+  }
+
+  function updateHourlyReminderMinute() {
+    if (elements.hourlyReminderMinute.value === "") return;
+    const value = Number(elements.hourlyReminderMinute.value);
+    if (!Number.isInteger(value) || value < 0 || value > 59) {
+      elements.hourlyReminderMinute.value = String(hourlyReminderMinute);
+      showToast("请输入 0–59 分钟");
+      return;
+    }
+    hourlyReminderMinute = value;
+    saveHourlyReminderMinute();
+    scheduleDailyReminder();
+    showToast(`每小时第 ${formatHourlyReminderMinute()}提醒`);
   }
 
   function saveRecords() {
@@ -1114,6 +1174,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
     elements.dailyReminderButton.addEventListener("click", toggleDailyReminder);
     elements.dailyReminderTestButton.addEventListener("click", testDailyReminder);
+    elements.hourlyReminderMinute.addEventListener("input", updateHourlyReminderMinute);
+    elements.hourlyReminderMinute.addEventListener("change", updateHourlyReminderMinute);
 
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
