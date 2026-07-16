@@ -219,8 +219,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 .reminder-card.is-countdown-hidden .reminder-hint,
 .reminder-card.is-countdown-hidden .reminder-options,
 .reminder-card.is-countdown-hidden .custom-time,
-.reminder-card.is-countdown-hidden #reminderButton,
-.reminder-card.is-countdown-hidden #alarmPlayButton {
+.reminder-card.is-countdown-hidden #reminderButton {
   display: none;
 }
 
@@ -589,6 +588,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   let dailyReminderTimerId = null;
   let countdownModeHidden = readCountdownModeHidden();
   let hourlyReminderMinute = readHourlyReminderMinute();
+  let hourlyAlarmRinging = false;
 
   function safeParse(key, fallback) {
     try {
@@ -737,16 +737,42 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       dailyReminder.lastNotifiedHour = hour;
       saveDailyReminder();
       showToast("该站起来活动两分钟啦");
-      elements.alarmAudio.play().catch(() => {});
+      startHourlyAlarm();
       showActivityNotification();
     }
     scheduleDailyReminder();
+  }
+
+  function stopAlarmAudio() {
+    hourlyAlarmRinging = false;
+    elements.alarmAudio.pause();
+    elements.alarmAudio.currentTime = 0;
+    elements.alarmPlayButton.hidden = true;
+    elements.alarmPlayButton.textContent = "播放闹钟声音";
+  }
+
+  function startHourlyAlarm() {
+    elements.alarmAudio.currentTime = 0;
+    elements.alarmPlayButton.textContent = "停止闹钟声音";
+    elements.alarmPlayButton.hidden = true;
+    elements.alarmAudio.play().then(() => {
+      hourlyAlarmRinging = true;
+      elements.alarmPlayButton.hidden = false;
+      elements.dailyReminderHint.textContent = "闹钟正在响，活动后会自动停止";
+    }).catch(() => {
+      hourlyAlarmRinging = false;
+      elements.alarmPlayButton.textContent = "播放闹钟声音";
+      elements.alarmPlayButton.hidden = false;
+      elements.dailyReminderHint.textContent = "浏览器阻止了自动播放，请点播放闹钟声音";
+      showToast("提醒已显示；浏览器阻止了声音播放");
+    });
   }
 
   async function toggleDailyReminder() {
     if (dailyReminder !== null) {
       dailyReminder = null;
       saveDailyReminder();
+      stopAlarmAudio();
       scheduleDailyReminder();
       showToast("每小时提醒已关闭");
       return;
@@ -919,6 +945,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     });
     saveRecords();
     scheduleDailyReminder();
+    if (hourlyAlarmRinging) stopAlarmAudio();
     if (reminder !== null) {
       stopReminder(false);
       showToast(`活动已生效，提醒已取消 · ${formatDuration(duration)}`);
@@ -1030,6 +1057,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     showActivityNotification("活动提醒时间到");
     elements.alarmAudio.play().catch(() => {
       elements.reminderHint.textContent = "浏览器阻止了自动播放，请点下面的按钮播放闹钟";
+      elements.alarmPlayButton.textContent = "播放闹钟声音";
       elements.alarmPlayButton.hidden = false;
     });
   }
@@ -1041,8 +1069,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     window.clearInterval(reminderTimerId);
     reminderTimerId = null;
     if (wakeLock !== null) wakeLock.release().catch(() => {});
-    elements.alarmAudio.pause();
-    elements.alarmAudio.currentTime = 0;
+    stopAlarmAudio();
     elements.reminderCountdown.textContent = "--:--";
     elements.reminderStatus.textContent = "未设置";
     elements.reminderStatus.classList.remove("is-active");
@@ -1166,9 +1193,21 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.countdownModeToggle.addEventListener("click", toggleCountdownMode);
 
     elements.alarmPlayButton.addEventListener("click", () => {
+      if (hourlyAlarmRinging) {
+        stopAlarmAudio();
+        showToast("闹钟已停止");
+        return;
+      }
       elements.alarmAudio.play().then(() => {
-        elements.alarmPlayButton.hidden = true;
-        elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
+        if (reminder?.ringing) {
+          elements.alarmPlayButton.hidden = true;
+          elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
+          return;
+        }
+        hourlyAlarmRinging = true;
+        elements.alarmPlayButton.textContent = "停止闹钟声音";
+        elements.alarmPlayButton.hidden = false;
+        elements.dailyReminderHint.textContent = "闹钟正在响，活动后会自动停止";
       }).catch(() => showToast("无法播放，请检查手机媒体音量"));
     });
 
