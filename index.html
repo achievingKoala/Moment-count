@@ -586,6 +586,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   let wakeLock = null;
   let dailyReminder = readDailyReminder();
   let dailyReminderTimerId = null;
+  let hourlyReminderCountdownTimerId = null;
   let countdownModeHidden = readCountdownModeHidden();
   let hourlyReminderMinute = readHourlyReminderMinute();
   let hourlyAlarmRinging = false;
@@ -655,7 +656,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   function renderCountdownMode() {
-    const isHidden = countdownModeHidden && reminder === null;
+    const isHidden = countdownModeHidden && reminder === null && dailyReminder === null;
     elements.reminderCard.classList.toggle("is-countdown-hidden", isHidden);
     elements.countdownModeToggle.textContent = isHidden ? "显示倒计时" : "隐藏倒计时";
     elements.countdownModeToggle.classList.toggle("is-active", isHidden);
@@ -707,6 +708,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     window.clearTimeout(dailyReminderTimerId);
     dailyReminderTimerId = null;
     renderDailyReminder();
+    syncHourlyReminderCountdown();
     if (dailyReminder === null) return;
     const delay = nextDailyReminderDate().getTime() - Date.now();
     dailyReminderTimerId = window.setTimeout(fireDailyReminder, Math.min(delay, 2_147_000_000));
@@ -966,7 +968,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   function updateReminder() {
     renderCountdownMode();
     if (reminder === null) {
-      elements.reminderCountdown.textContent = "--:--";
+      updateHourlyReminderCountdown();
       return;
     }
 
@@ -984,6 +986,55 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.reminderButton.classList.add("is-active");
     elements.reminderButton.classList.remove("is-ringing");
     setReminderControlsDisabled(true);
+  }
+
+  function updateHourlyReminderCountdown() {
+    if (dailyReminder === null) {
+      elements.reminderCountdown.textContent = "--:--";
+      elements.reminderStatus.textContent = "未设置";
+      elements.reminderStatus.classList.remove("is-active");
+      elements.reminderHint.textContent = "到时间仍未完成有效活动，就会响起闹钟";
+      elements.reminderButton.textContent = "启动倒计时";
+      elements.reminderButton.classList.remove("is-active", "is-ringing");
+      setReminderControlsDisabled(false);
+      return;
+    }
+
+    const isWaitingForManualPlay = !elements.alarmPlayButton.hidden && !reminder;
+    if (hourlyAlarmRinging || isWaitingForManualPlay) {
+      elements.reminderCountdown.textContent = "00:00";
+      elements.reminderStatus.textContent = hourlyAlarmRinging ? "正在响铃" : "等待播放";
+      elements.reminderStatus.classList.add("is-active");
+      elements.reminderHint.textContent = hourlyAlarmRinging
+        ? "闹钟正在响，活动后会自动停止"
+        : "浏览器阻止了自动播放，请点下面的按钮播放闹钟";
+      return;
+    }
+
+    const remaining = nextDailyReminderDate().getTime() - Date.now();
+    elements.reminderCountdown.textContent = formatCountdown(remaining);
+    elements.reminderStatus.textContent = "每小时提醒";
+    elements.reminderStatus.classList.add("is-active");
+    elements.reminderHint.textContent = hasActivityThisHour()
+      ? "本小时已完成，倒计时到下次检查"
+      : "倒计时结束时，会检查本小时是否已经活动";
+    elements.reminderButton.textContent = "启动倒计时";
+    elements.reminderButton.classList.remove("is-active", "is-ringing");
+    setReminderControlsDisabled(false);
+  }
+
+  function stopHourlyReminderCountdown() {
+    window.clearInterval(hourlyReminderCountdownTimerId);
+    hourlyReminderCountdownTimerId = null;
+  }
+
+  function syncHourlyReminderCountdown() {
+    stopHourlyReminderCountdown();
+    if (reminder !== null) return;
+    updateReminder();
+    if (dailyReminder !== null) {
+      hourlyReminderCountdownTimerId = window.setInterval(updateReminder, 1000);
+    }
   }
 
   function setReminderControlsDisabled(disabled) {
@@ -1028,6 +1079,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     primeAlarmAudio();
     reminder = { deadline: Date.now() + duration, ringing: false };
     saveReminder();
+    stopHourlyReminderCountdown();
     requestWakeLock();
     renderCountdownMode();
     updateReminder();
@@ -1079,6 +1131,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.reminderButton.classList.remove("is-active", "is-ringing");
     setReminderControlsDisabled(false);
     renderCountdownMode();
+    syncHourlyReminderCountdown();
     if (showMessage) showToast(wasRinging ? "闹钟已停止" : "倒计时已取消");
   }
 
