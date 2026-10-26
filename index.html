@@ -730,7 +730,12 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   function showActivityNotification(title = "该站起来啦") {
     if (isLocalRun()) return false;
     if (!("Notification" in window) || Notification.permission !== "granted") return false;
-    new Notification(title, { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+    const notification = new Notification(title, { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+    notification.addEventListener("click", () => {
+      window.focus();
+      window.scrollTo({ top: 0, behavior: "instant" });
+      notification.close();
+    });
     return true;
   }
 
