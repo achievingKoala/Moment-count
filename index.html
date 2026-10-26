@@ -535,6 +535,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   "use strict";
 
   const MINIMUM_DURATION = 120_000;
+  const ALARM_MAX_DURATION = 30_000;
+  const alarmFades = new WeakMap();
   const RECORDS_KEY = "move-two-minutes.records.v1";
   const ACTIVE_KEY = "move-two-minutes.active.v1";
   const REMINDER_KEY = "move-two-minutes.reminder.v1";
@@ -745,7 +747,49 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     scheduleDailyReminder();
   }
 
+  function cancelAlarmFade(audio) {
+    const timers = alarmFades.get(audio);
+    if (timers) {
+      window.clearInterval(timers.interval);
+      window.clearTimeout(timers.timeout);
+      alarmFades.delete(audio);
+    }
+  }
+
+  function playFadingAlarm(audio, duration, onFinished = () => {}) {
+    cancelAlarmFade(audio);
+    audio.volume = 1;
+    return audio.play().then(() => {
+      const startedAt = Date.now();
+      const finish = () => {
+        cancelAlarmFade(audio);
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = 1;
+        onFinished();
+      };
+      const interval = window.setInterval(() => {
+        const elapsed = Date.now() - startedAt;
+        if (elapsed >= duration) finish();
+        else audio.volume = Math.max(0, 1 - elapsed / duration);
+      }, 100);
+      const timeout = window.setTimeout(finish, duration);
+      alarmFades.set(audio, { interval, timeout });
+    });
+  }
+
+  function finishAlarmAutomatically() {
+    if (reminder?.ringing) stopReminder(false);
+    else {
+      stopAlarmAudio();
+      renderDailyReminder();
+      updateReminder();
+    }
+    showToast("响铃已满 30 秒，已自动停止");
+  }
+
   function stopAlarmAudio() {
+    cancelAlarmFade(elements.alarmAudio);
     hourlyAlarmRinging = false;
     elements.alarmAudio.pause();
     elements.alarmAudio.currentTime = 0;
@@ -757,7 +801,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.alarmAudio.currentTime = 0;
     elements.alarmPlayButton.textContent = "停止闹钟声音";
     elements.alarmPlayButton.hidden = true;
-    elements.alarmAudio.play().then(() => {
+    playFadingAlarm(elements.alarmAudio, ALARM_MAX_DURATION, finishAlarmAutomatically).then(() => {
       hourlyAlarmRinging = true;
       elements.alarmPlayButton.hidden = false;
       elements.dailyReminderHint.textContent = "闹钟正在响，活动后会自动停止";
@@ -793,11 +837,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
     showToast("该站起来活动两分钟啦");
     const previewAudio = new Audio(elements.alarmAudio.currentSrc || elements.alarmAudio.src);
-    previewAudio.play().catch(() => showToast("提醒已显示；浏览器阻止了声音播放"));
-    window.setTimeout(() => {
-      previewAudio.pause();
-      previewAudio.currentTime = 0;
-    }, 3000);
+    playFadingAlarm(previewAudio, 3000).catch(() => showToast("提醒已显示；浏览器阻止了声音播放"));
 
     showActivityNotification();
   }
@@ -1107,7 +1147,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.reminderButton.classList.add("is-ringing");
     setReminderControlsDisabled(true);
     showActivityNotification("活动提醒时间到");
-    elements.alarmAudio.play().catch(() => {
+    playFadingAlarm(elements.alarmAudio, ALARM_MAX_DURATION, finishAlarmAutomatically).catch(() => {
       elements.reminderHint.textContent = "浏览器阻止了自动播放，请点下面的按钮播放闹钟";
       elements.alarmPlayButton.textContent = "播放闹钟声音";
       elements.alarmPlayButton.hidden = false;
@@ -1251,7 +1291,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         showToast("闹钟已停止");
         return;
       }
-      elements.alarmAudio.play().then(() => {
+      playFadingAlarm(elements.alarmAudio, ALARM_MAX_DURATION, finishAlarmAutomatically).then(() => {
         if (reminder?.ringing) {
           elements.alarmPlayButton.hidden = true;
           elements.reminderHint.textContent = "时间到了，还没有完成有效活动";
