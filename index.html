@@ -181,6 +181,11 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 .action-icon { width: 12px; height: 12px; border-radius: 50%; background: var(--lime); }
 .is-stopping .action-icon { border-radius: 3px; background: var(--ink); }
 
+.away-panel { margin-top: 14px; padding: 16px 20px; border: 1px solid var(--line); border-radius: 18px; color: var(--muted); font-size: 0.76rem; line-height: 1.6; text-align: left; }
+.away-panel strong { color: var(--ink); font-size: 0.82rem; }
+.away-panel p { margin: 6px 0 0; }
+.away-panel #awayHistory:not(:empty) { margin-top: 8px; }
+
 .history-section { margin-top: 34px; }
 
 .reminder-card {
@@ -457,6 +462,12 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         <button class="reminder-action" id="musicPreviewButton" type="button">试听切出音乐</button>
       </section>
 
+      <aside class="away-panel" aria-label="离开页面记录">
+        <strong>离开记录</strong>
+        <p id="awaySummary">本次尚未离开页面</p>
+        <div id="awayHistory"></div>
+      </aside>
+
       <section class="reminder-card" id="reminderCard" aria-labelledby="reminderTitle">
         <div class="timer-heading">
           <div>
@@ -573,6 +584,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     customMinutes: document.querySelector("#customMinutes"),
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
+    awaySummary: document.querySelector("#awaySummary"),
+    awayHistory: document.querySelector("#awayHistory"),
     activityMusic: document.querySelector("#activityMusic"),
     musicPreviewButton: document.querySelector("#musicPreviewButton"),
     alarmAudio: document.querySelector("#alarmAudio"),
@@ -584,6 +597,12 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
   let records = readRecords();
   let activeStart = readActiveStart();
+  const AWAY_KEY = "move-two-minutes.away.v1";
+  const savedAway = safeParse(AWAY_KEY, null);
+  let awayPeriods = savedAway?.start === activeStart && Array.isArray(savedAway.periods)
+    ? savedAway.periods.filter(p => Number.isFinite(p.start) && Number.isFinite(p.end) && p.end >= p.start) : [];
+  let awayStart = savedAway?.start === activeStart && Number.isFinite(savedAway.awayStart)
+    ? savedAway.awayStart : null;
   let timerId = null;
   let toastTimer = null;
   let reminder = readReminder();
@@ -943,24 +962,63 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       : `${totalMinutes}<small>分钟</small>`;
   }
 
+  function saveAway() {
+    localStorage.setItem(AWAY_KEY, JSON.stringify({ start: activeStart, periods: awayPeriods, awayStart }));
+  }
+
+  function awayDuration(now = Date.now()) {
+    return awayPeriods.reduce((total, period) => total + period.end - period.start, 0)
+      + (awayStart === null ? 0 : Math.max(0, now - awayStart));
+  }
+
+  function renderAway() {
+    const now = Date.now();
+    elements.awaySummary.textContent = awayStart !== null
+      ? `站立计时已暂停 · 本次离开 ${formatTimer(now - awayStart)} · 累计 ${formatTimer(awayDuration(now))}`
+      : awayPeriods.length
+        ? `已返回 · 上次离开 ${formatTimer(awayPeriods.at(-1).end - awayPeriods.at(-1).start)} · 累计离开 ${formatTimer(awayDuration(now))}`
+        : "本次尚未离开页面";
+    elements.awayHistory.replaceChildren(...awayPeriods.map((period, index) => {
+      const line = document.createElement("div");
+      line.textContent = `第 ${index + 1} 次离开 · ${new Date(period.start).toLocaleTimeString("zh-CN", { hour12: false })} · ${formatTimer(period.end - period.start)}`;
+      return line;
+    }));
+  }
+
+  function syncActivityPresence() {
+    if (activeStart !== null) {
+      if (shouldPlayActivityMusic() && awayStart === null) {
+        awayStart = Date.now();
+        saveAway();
+      } else if (!shouldPlayActivityMusic() && awayStart !== null) {
+        awayPeriods.push({ start: awayStart, end: Date.now() });
+        awayStart = null;
+        saveAway();
+      }
+    }
+    syncActivityMusic();
+    updateTimer();
+  }
+
   function updateTimer() {
+    renderAway();
     if (activeStart === null) {
       elements.timerDisplay.textContent = "00:00";
       elements.progressFill.style.width = "0%";
       return;
     }
 
-    const elapsed = Math.max(0, Date.now() - activeStart);
+    const elapsed = Math.max(0, Date.now() - activeStart - awayDuration());
     const isEffective = elapsed >= MINIMUM_DURATION;
     elements.timerDisplay.textContent = formatTimer(elapsed);
     elements.progressFill.style.width = `${Math.min(100, elapsed / MINIMUM_DURATION * 100)}%`;
-    elements.statusPill.textContent = isEffective ? "已生效" : "进行中";
+    elements.statusPill.textContent = awayStart !== null ? "已暂停" : isEffective ? "已生效" : "进行中";
     elements.statusPill.classList.add("is-active");
-    elements.timerTitle.textContent = isEffective ? "这次活动已生效" : "保持活动";
+    elements.timerTitle.textContent = awayStart !== null ? "返回页面后继续计时" : isEffective ? "这次活动已生效" : "保持活动";
     elements.timerHint.textContent = isEffective
       ? "已经超过 2 分钟，结束后会保存这次记录"
       : `再坚持 ${formatTimer(MINIMUM_DURATION - elapsed)}，这次活动就生效`;
-    elements.timerHint.textContent += "；切出页面自动播放音乐，返回后停止";
+    elements.timerHint.textContent += "；切出页面播放音乐并暂停计时，返回后继续";
   }
 
   function shouldPlayActivityMusic() {
@@ -998,6 +1056,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
   function startActivity() {
     activeStart = Date.now();
+    awayPeriods = [];
+    awayStart = null;
+    saveAway();
     primeActivityMusic();
     saveActiveStart();
     elements.activityButton.classList.add("is-stopping");
@@ -1010,9 +1071,14 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     const endTime = Date.now();
     const startTime = activeStart;
     if (startTime === null) return;
-    const duration = endTime - startTime;
+    const duration = Math.max(0, endTime - startTime - awayDuration(endTime));
+    if (awayStart !== null) {
+      awayPeriods.push({ start: awayStart, end: endTime });
+      awayStart = null;
+    }
 
     activeStart = null;
+    saveAway();
     stopActivityMusic();
     saveActiveStart();
     window.clearInterval(timerId);
@@ -1028,7 +1094,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       id: globalThis.crypto?.randomUUID?.() || `${endTime}-${Math.random().toString(16).slice(2)}`,
       startTime,
       endTime,
-      duration
+      duration,
+      awayPeriods: awayPeriods.map(period => ({ ...period })),
+      awayDuration: awayDuration(endTime)
     });
     saveRecords();
     scheduleDailyReminder();
@@ -1304,8 +1372,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       audio.play().then(() => showToast("正在试听；点击开始或结束活动可停止音乐"))
         .catch(() => showToast("播放失败，请检查标签页静音和系统音量"));
     });
-    window.addEventListener("blur", syncActivityMusic);
-    window.addEventListener("focus", syncActivityMusic);
+    window.addEventListener("blur", syncActivityPresence);
+    window.addEventListener("focus", syncActivityPresence);
 
     elements.historyList.addEventListener("click", (event) => {
       const button = event.target.closest("[data-delete-hour]");
@@ -1365,7 +1433,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.hourlyReminderMinute.addEventListener("change", updateHourlyReminderMinute);
 
     document.addEventListener("visibilitychange", () => {
-      syncActivityMusic();
+      syncActivityPresence();
       if (!document.hidden) {
         updateTimer();
         updateToday();
@@ -1385,6 +1453,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     } else {
       resetTimerView();
     }
+
+    syncActivityPresence();
 
     if (reminder !== null) {
       if (reminder.ringing || reminder.deadline <= Date.now()) triggerAlarm();
