@@ -454,6 +454,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
           <span class="action-icon" aria-hidden="true"></span>
           <span id="activityButtonLabel">开始活动</span>
         </button>
+        <button class="reminder-action" id="musicPreviewButton" type="button">试听切出音乐</button>
       </section>
 
       <section class="reminder-card" id="reminderCard" aria-labelledby="reminderTitle">
@@ -516,6 +517,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <audio id="activityMusic" src="activity-music.wav" preload="auto" loop></audio>
     <audio id="alarmAudio" src="alarm-clock.mp3" preload="auto" loop></audio>
 
     <dialog class="confirm-dialog" id="confirmDialog">
@@ -571,6 +573,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     customMinutes: document.querySelector("#customMinutes"),
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
+    activityMusic: document.querySelector("#activityMusic"),
+    musicPreviewButton: document.querySelector("#musicPreviewButton"),
     alarmAudio: document.querySelector("#alarmAudio"),
     hourlyReminderMinute: document.querySelector("#hourlyReminderMinute"),
     dailyReminderButton: document.querySelector("#dailyReminderButton"),
@@ -956,10 +960,45 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.timerHint.textContent = isEffective
       ? "已经超过 2 分钟，结束后会保存这次记录"
       : `再坚持 ${formatTimer(MINIMUM_DURATION - elapsed)}，这次活动就生效`;
+    elements.timerHint.textContent += "；切出页面自动播放音乐，返回后停止";
+  }
+
+  function shouldPlayActivityMusic() {
+    return activeStart !== null && (document.hidden || !document.hasFocus());
+  }
+
+  function syncActivityMusic() {
+    const audio = elements.activityMusic;
+    if (shouldPlayActivityMusic()) {
+      audio.muted = false;
+      audio.play().then(() => {
+        if (!shouldPlayActivityMusic()) stopActivityMusic();
+      }).catch(() => showToast("音乐未能播放，请回到页面重新开始活动后再切出"));
+    } else {
+      stopActivityMusic();
+    }
+  }
+
+  function stopActivityMusic() {
+    elements.activityMusic.pause();
+    elements.activityMusic.currentTime = 0;
+  }
+
+  function primeActivityMusic() {
+    const audio = elements.activityMusic;
+    audio.muted = true;
+    audio.play().then(() => {
+      syncActivityMusic();
+      audio.muted = false;
+    }).catch(() => {
+      audio.muted = false;
+      showToast("音乐未能启用，请检查浏览器的声音播放权限");
+    });
   }
 
   function startActivity() {
     activeStart = Date.now();
+    primeActivityMusic();
     saveActiveStart();
     elements.activityButton.classList.add("is-stopping");
     elements.activityButtonLabel.textContent = "结束活动";
@@ -974,6 +1013,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     const duration = endTime - startTime;
 
     activeStart = null;
+    stopActivityMusic();
     saveActiveStart();
     window.clearInterval(timerId);
     timerId = null;
@@ -1257,6 +1297,16 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       else stopActivity();
     });
 
+    elements.musicPreviewButton.addEventListener("click", () => {
+      const audio = elements.activityMusic;
+      audio.muted = false;
+      audio.volume = 1;
+      audio.play().then(() => showToast("正在试听；点击开始或结束活动可停止音乐"))
+        .catch(() => showToast("播放失败，请检查标签页静音和系统音量"));
+    });
+    window.addEventListener("blur", syncActivityMusic);
+    window.addEventListener("focus", syncActivityMusic);
+
     elements.historyList.addEventListener("click", (event) => {
       const button = event.target.closest("[data-delete-hour]");
       if (button) deleteHourlyRecords(button.dataset.deleteHour);
@@ -1315,6 +1365,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.hourlyReminderMinute.addEventListener("change", updateHourlyReminderMinute);
 
     document.addEventListener("visibilitychange", () => {
+      syncActivityMusic();
       if (!document.hidden) {
         updateTimer();
         updateToday();
