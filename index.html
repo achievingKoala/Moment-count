@@ -544,6 +544,17 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       </form>
     </dialog>
 
+    <dialog class="confirm-dialog" id="reminderDialog" aria-labelledby="reminderDialogTitle">
+      <form method="dialog">
+        <h2 id="reminderDialogTitle">该起来活动两分钟啦</h2>
+        <p>现在开始活动，或者稍后再提醒。</p>
+        <div class="dialog-actions">
+          <button value="dismiss" class="dialog-button dialog-button--muted">关闭提醒</button>
+          <button value="snooze" class="dialog-button" style="background: var(--lime)">10 分钟后提醒我</button>
+        </div>
+      </form>
+    </dialog>
+
     <script>
 (() => {
   "use strict";
@@ -586,6 +597,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
     snoozeButton: document.querySelector("#snoozeButton"),
+    reminderDialog: document.querySelector("#reminderDialog"),
     awaySummary: document.querySelector("#awaySummary"),
     awayHistory: document.querySelector("#awayHistory"),
     activityMusic: document.querySelector("#activityMusic"),
@@ -764,9 +776,17 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     return notificationWorker;
   }
 
+  function showReminderDialog() {
+    if (!elements.reminderDialog.open) {
+      elements.reminderDialog.returnValue = "";
+      elements.reminderDialog.showModal();
+    }
+  }
+
   async function showActivityNotification(title = "该站起来啦") {
-    if (isLocalRun()) return false;
-    if (!("Notification" in window) || Notification.permission !== "granted") return false;
+    showReminderDialog();
+    const notificationsAllowed = !isLocalRun() && "Notification" in window && Notification.permission === "granted";
+    if (!notificationsAllowed) return false;
     const registration = await prepareNotificationWorker();
     if (registration) {
       try {
@@ -781,13 +801,18 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         // Fall back to the basic notification when persistent notifications fail.
       }
     }
-    const notification = new Notification(title, { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
-    notification.addEventListener("click", () => {
-      window.focus();
-      window.scrollTo({ top: 0, behavior: "instant" });
-      notification.close();
-    });
-    return true;
+    try {
+      const notification = new Notification(title, { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
+      notification.addEventListener("click", () => {
+        window.focus();
+        window.scrollTo({ top: 0, behavior: "instant" });
+        showReminderDialog();
+        notification.close();
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function fireDailyReminder() {
@@ -1131,6 +1156,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     });
     saveRecords();
     scheduleDailyReminder();
+    if (elements.reminderDialog.open) elements.reminderDialog.close();
     elements.snoozeButton.hidden = true;
     if (hourlyAlarmRinging) stopAlarmAudio();
     if (reminder !== null) {
@@ -1275,6 +1301,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   function snoozeReminder(deadline = Date.now() + 10 * 60_000) {
+    if (elements.reminderDialog.open) elements.reminderDialog.close();
     stopAlarmAudio();
     reminder = { deadline, ringing: false };
     saveReminder();
@@ -1454,6 +1481,19 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
     elements.countdownModeToggle.addEventListener("click", toggleCountdownMode);
     elements.snoozeButton.addEventListener("click", () => snoozeReminder());
+    elements.reminderDialog.addEventListener("close", () => {
+      const action = elements.reminderDialog.returnValue;
+      elements.reminderDialog.returnValue = "";
+      if (action === "snooze") snoozeReminder();
+      else if (action === "dismiss") {
+        if (reminder?.ringing) stopReminder(false);
+        else stopAlarmAudio();
+      }
+    });
+    elements.reminderDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      elements.reminderDialog.close("dismiss");
+    });
 
     elements.alarmPlayButton.addEventListener("click", () => {
       if (hourlyAlarmRinging) {
