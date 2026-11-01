@@ -627,7 +627,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   "use strict";
 
   const MINIMUM_DURATION = 120_000;
-  const ALARM_MAX_DURATION = 30_000;
+  const ALARM_MAX_DURATION = 120_000;
   const alarmFades = new WeakMap();
   const RECORDS_KEY = "move-two-minutes.records.v1";
   const ACTIVE_KEY = "move-two-minutes.active.v1";
@@ -972,7 +972,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       updateReminder();
     }
     elements.snoozeButton.hidden = false;
-    showToast("响铃已满 30 秒，已自动停止");
+    showToast("响铃已满 2 分钟，已自动停止");
   }
 
   function stopAlarmAudio() {
