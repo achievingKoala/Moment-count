@@ -484,7 +484,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
         <p class="reminder-hint" id="reminderHint">到时间仍未完成有效活动，就会响起闹钟</p>
 
         <div class="reminder-options" id="reminderOptions" aria-label="选择倒计时时长">
-          <button type="button" class="time-chip time-chip--test" data-seconds="10">10 秒测试</button>
+          <button type="button" class="time-chip time-chip--test" data-seconds="3">3 秒测试</button>
           <button type="button" class="time-chip" data-minutes="5">5 分钟</button>
           <button type="button" class="time-chip is-selected" data-minutes="10">10 分钟</button>
           <button type="button" class="time-chip" data-minutes="15">15 分钟</button>
@@ -499,6 +499,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
         <button class="reminder-action" id="reminderButton" type="button">启动倒计时</button>
         <button class="reminder-action reminder-action--sound" id="alarmPlayButton" type="button" hidden>播放闹钟声音</button>
+        <button class="reminder-action" id="snoozeButton" type="button" hidden>10 分钟后提醒我</button>
 
         <div class="daily-reminder">
           <div>
@@ -529,7 +530,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <audio id="activityMusic" src="activity-music.wav" preload="auto" loop></audio>
-    <audio id="alarmAudio" src="alarm-clock.mp3" preload="auto" loop></audio>
+    <audio id="alarmAudio" src="alarm-clock.wav" preload="auto" loop></audio>
 
     <dialog class="confirm-dialog" id="confirmDialog">
       <form method="dialog">
@@ -584,6 +585,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     customMinutes: document.querySelector("#customMinutes"),
     reminderButton: document.querySelector("#reminderButton"),
     alarmPlayButton: document.querySelector("#alarmPlayButton"),
+    snoozeButton: document.querySelector("#snoozeButton"),
     awaySummary: document.querySelector("#awaySummary"),
     awayHistory: document.querySelector("#awayHistory"),
     activityMusic: document.querySelector("#activityMusic"),
@@ -750,9 +752,35 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     return Notification.requestPermission();
   }
 
-  function showActivityNotification(title = "该站起来啦") {
+  let notificationWorker = null;
+
+  function prepareNotificationWorker() {
+    if (isLocalRun() || !("serviceWorker" in navigator)) return Promise.resolve(null);
+    if (!notificationWorker) {
+      notificationWorker = navigator.serviceWorker.register("./notification-worker.js")
+        .then(() => navigator.serviceWorker.ready)
+        .catch(() => { notificationWorker = null; return null; });
+    }
+    return notificationWorker;
+  }
+
+  async function showActivityNotification(title = "该站起来啦") {
     if (isLocalRun()) return false;
     if (!("Notification" in window) || Notification.permission !== "granted") return false;
+    const registration = await prepareNotificationWorker();
+    if (registration) {
+      try {
+        await registration.showNotification(title, {
+          body: "该活动两分钟啦，也可以选择 10 分钟后提醒我。",
+          tag: "activity-reminder",
+          actions: [{ action: "snooze-10", title: "10 分钟后提醒我" }],
+          data: { url: window.location.href.split("#")[0] }
+        });
+        return true;
+      } catch {
+        // Fall back to the basic notification when persistent notifications fail.
+      }
+    }
     const notification = new Notification(title, { body: "今天至少站起来活动两分钟，完成后记得回来记录。" });
     notification.addEventListener("click", () => {
       window.focus();
@@ -813,10 +841,12 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       renderDailyReminder();
       updateReminder();
     }
+    elements.snoozeButton.hidden = false;
     showToast("响铃已满 30 秒，已自动停止");
   }
 
   function stopAlarmAudio() {
+    elements.snoozeButton.hidden = true;
     cancelAlarmFade(elements.alarmAudio);
     hourlyAlarmRinging = false;
     elements.alarmAudio.pause();
@@ -826,6 +856,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   function startHourlyAlarm() {
+    elements.snoozeButton.hidden = false;
     elements.alarmAudio.currentTime = 0;
     elements.alarmPlayButton.textContent = "停止闹钟声音";
     elements.alarmPlayButton.hidden = true;
@@ -1100,6 +1131,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     });
     saveRecords();
     scheduleDailyReminder();
+    elements.snoozeButton.hidden = true;
     if (hourlyAlarmRinging) stopAlarmAudio();
     if (reminder !== null) {
       stopReminder(false);
@@ -1229,6 +1261,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     const durationLabel = duration < 60_000 ? `${duration / 1000} 秒测试` : `${duration / 60_000} 分钟`;
 
     await requestNotificationPermission();
+    stopAlarmAudio();
     primeAlarmAudio();
     reminder = { deadline: Date.now() + duration, ringing: false };
     saveReminder();
@@ -1241,8 +1274,21 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     showToast(`已设置 ${durationLabel}活动提醒`);
   }
 
+  function snoozeReminder(deadline = Date.now() + 10 * 60_000) {
+    stopAlarmAudio();
+    reminder = { deadline, ringing: false };
+    saveReminder();
+    stopHourlyReminderCountdown();
+    requestWakeLock();
+    updateReminder();
+    window.clearInterval(reminderTimerId);
+    reminderTimerId = window.setInterval(updateReminder, 250);
+    showToast("已推迟，10 分钟后提醒你");
+  }
+
   function triggerAlarm() {
     if (reminder === null) return;
+    elements.snoozeButton.hidden = false;
     if (!reminder.ringing) {
       reminder.ringing = true;
       saveReminder();
@@ -1407,6 +1453,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     });
 
     elements.countdownModeToggle.addEventListener("click", toggleCountdownMode);
+    elements.snoozeButton.addEventListener("click", () => snoozeReminder());
 
     elements.alarmPlayButton.addEventListener("click", () => {
       if (hourlyAlarmRinging) {
@@ -1467,6 +1514,21 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   initialize();
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "activity-snooze" && Number.isFinite(event.data.deadline)) {
+        snoozeReminder(event.data.deadline);
+      } else if (event.data?.type === "activity-open") {
+        window.scrollTo({ top: 0, behavior: "instant" });
+      }
+    });
+  }
+  const snoozeMatch = window.location.hash.match(/^#snooze=(\d+)$/);
+  if (snoozeMatch) {
+    snoozeReminder(Number(snoozeMatch[1]));
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  prepareNotificationWorker();
 })();
 
     </script>
