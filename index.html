@@ -338,6 +338,59 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   font-weight: 800;
 }
 
+.today-count-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: auto; padding-top: 12px; }
+.today-count-row > strong { font-size: 3rem; line-height: 1; letter-spacing: -0.06em; }
+.hour-activity { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 999px; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.08); font-size: 0.62rem; line-height: 1.4; white-space: nowrap; }
+.hour-activity-dot { flex: 0 0 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.hour-activity.is-complete { color: var(--lime); background: rgba(217,242,106,0.12); }
+
+.night-quiet-setting {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.38);
+  cursor: pointer;
+  position: relative;
+}
+.night-quiet-copy { display: grid; gap: 4px; }
+.night-quiet-title { color: var(--ink); font-size: 0.8rem; font-weight: 750; }
+.night-quiet-time { color: var(--muted); font-size: 0.7rem; letter-spacing: 0.02em; }
+.night-quiet-setting input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.night-quiet-switch {
+  flex: 0 0 42px;
+  height: 25px;
+  border-radius: 999px;
+  background: #c5c3ba;
+  transition: background 160ms ease;
+}
+.night-quiet-switch::after {
+  content: "";
+  display: block;
+  width: 19px;
+  height: 19px;
+  margin: 3px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  transition: transform 160ms ease;
+}
+.night-quiet-setting input:checked + .night-quiet-switch { background: var(--ink); }
+.night-quiet-setting input:checked + .night-quiet-switch::after { transform: translateX(17px); }
+.night-quiet-setting input:focus-visible + .night-quiet-switch { outline: 3px solid var(--lime-dark); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .night-quiet-switch, .night-quiet-switch::after { transition: none; }
+}
+
 .daily-reminder-button { grid-column: 1 / -1; margin-top: 0; }
 .daily-reminder-button.is-active { color: white; background: var(--ink); }
 .daily-reminder-test { grid-column: 1 / -1; margin-top: -4px; border-color: #aaa69b; color: var(--muted); }
@@ -430,7 +483,13 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       <section class="summary-grid" aria-label="今日活动统计">
         <article class="summary-card summary-card--dark">
           <span>今日活动</span>
-          <strong id="todayCount">0</strong>
+          <div class="today-count-row">
+            <strong id="todayCount">0</strong>
+            <span class="hour-activity" id="hourActivity" role="status">
+              <span class="hour-activity-dot" aria-hidden="true"></span>
+              <span id="hourActivityStatus">本小时未完成</span>
+            </span>
+          </div>
           <small id="todayGoal">目标 8 次，还差 8 次</small>
         </article>
         <article class="summary-card summary-card--lime">
@@ -511,6 +570,14 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
               分钟提醒
             </label>
           </div>
+          <label class="night-quiet-setting" for="nightQuietEnabled">
+            <span class="night-quiet-copy">
+              <span class="night-quiet-title">夜间免打扰</span>
+              <span class="night-quiet-time">22:00 — 次日 08:00</span>
+            </span>
+            <input id="nightQuietEnabled" type="checkbox" role="switch" checked />
+            <span class="night-quiet-switch" aria-hidden="true"></span>
+          </label>
           <button class="reminder-action daily-reminder-button" id="dailyReminderButton" type="button">开启每小时提醒</button>
           <button class="reminder-action daily-reminder-test" id="dailyReminderTestButton" type="button">测试提醒效果</button>
         </div>
@@ -568,6 +635,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   const DAILY_REMINDER_KEY = "move-two-minutes.daily-reminder.v1";
   const COUNTDOWN_HIDDEN_KEY = "move-two-minutes.countdown-hidden.v1";
   const HOURLY_REMINDER_MINUTE_KEY = "move-two-minutes.hourly-reminder-minute.v1";
+  const NIGHT_QUIET_KEY = "move-two-minutes.night-quiet.v1";
   const DAILY_TARGET_COUNT = 8;
   const DEFAULT_HOURLY_REMINDER_MINUTE = 50;
 
@@ -603,6 +671,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     activityMusic: document.querySelector("#activityMusic"),
     musicPreviewButton: document.querySelector("#musicPreviewButton"),
     alarmAudio: document.querySelector("#alarmAudio"),
+    nightQuietEnabled: document.querySelector("#nightQuietEnabled"),
     hourlyReminderMinute: document.querySelector("#hourlyReminderMinute"),
     dailyReminderButton: document.querySelector("#dailyReminderButton"),
     dailyReminderTestButton: document.querySelector("#dailyReminderTestButton"),
@@ -629,6 +698,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   let countdownModeHidden = readCountdownModeHidden();
   let hourlyReminderMinute = readHourlyReminderMinute();
   let hourlyAlarmRinging = false;
+  let nightQuietEnabled = localStorage.getItem(NIGHT_QUIET_KEY) !== "false";
 
   function safeParse(key, fallback) {
     try {
@@ -722,15 +792,24 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     return `${hourlyReminderMinute} 分`;
   }
 
+  function isNightQuietTime(date = new Date()) {
+    return nightQuietEnabled && (date.getHours() >= 22 || date.getHours() < 8);
+  }
+
   function nextDailyReminderDate() {
     const now = new Date();
     const next = new Date();
     next.setMinutes(hourlyReminderMinute, 0, 0);
     if (next <= now) next.setHours(next.getHours() + 1);
+    if (isNightQuietTime(next)) {
+      if (next.getHours() >= 22) next.setDate(next.getDate() + 1);
+      next.setHours(8, hourlyReminderMinute, 0, 0);
+    }
     return next;
   }
 
   function renderDailyReminder() {
+    elements.nightQuietEnabled.checked = nightQuietEnabled;
     elements.hourlyReminderMinute.value = String(hourlyReminderMinute);
     if (dailyReminder === null) {
       elements.dailyReminderButton.textContent = "开启每小时提醒";
@@ -740,7 +819,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     }
     elements.dailyReminderButton.textContent = "关闭每小时提醒";
     elements.dailyReminderButton.classList.add("is-active");
-    elements.dailyReminderHint.textContent = hasActivityThisHour()
+    elements.dailyReminderHint.textContent = isNightQuietTime()
+      ? `夜间免打扰中，早上 08:${String(hourlyReminderMinute).padStart(2, "0")}恢复检查`
+      : hasActivityThisHour()
       ? `本小时已完成，下个小时 ${formatHourlyReminderMinute()}继续检查`
       : `已开启，每小时 ${formatHourlyReminderMinute()}提醒`;
   }
@@ -842,7 +923,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   function fireDailyReminder() {
     if (dailyReminder === null) return;
     const hour = hourlyKey(Date.now());
-    if (!hasActivityThisHour() && dailyReminder.lastNotifiedHour !== hour) {
+    if (!isNightQuietTime() && !hasActivityThisHour() && dailyReminder.lastNotifiedHour !== hour) {
       dailyReminder.lastNotifiedHour = hour;
       saveDailyReminder();
       showToast("该站起来活动两分钟啦");
@@ -1028,7 +1109,17 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     return [...groups.values()].sort((a, b) => b.timestamp - a.timestamp);
   }
 
+  function updateHourActivity() {
+    const completed = hasActivityThisHour();
+    document.querySelector("#hourActivity").classList.toggle("is-complete", completed);
+    document.querySelector("#hourActivityStatus").textContent = completed
+      ? "本小时已完成" : "本小时未完成";
+    document.querySelector("#hourActivity").title = completed
+      ? "本小时已记录有效活动，无需再提醒" : "活动满 2 分钟并结束后计入";
+  }
+
   function updateToday() {
+    updateHourActivity();
     const todayRecords = records.filter((record) => isSameLocalDay(record.endTime));
     const total = todayRecords.reduce((sum, record) => sum + record.duration, 0);
     elements.todayCount.textContent = String(todayRecords.length);
@@ -1249,9 +1340,11 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
     const remaining = nextDailyReminderDate().getTime() - Date.now();
     elements.reminderCountdown.textContent = formatCountdown(remaining);
-    elements.reminderStatus.textContent = "每小时提醒";
+    elements.reminderStatus.textContent = isNightQuietTime() ? "夜间免打扰" : "每小时提醒";
     elements.reminderStatus.classList.add("is-active");
-    elements.reminderHint.textContent = hasActivityThisHour()
+    elements.reminderHint.textContent = isNightQuietTime()
+      ? "22:00–次日 08:00 暂停每小时提醒，倒计时到早晨下次检查"
+      : hasActivityThisHour()
       ? "本小时已完成，倒计时到下次检查"
       : "倒计时结束时，会检查本小时是否已经活动";
     elements.reminderButton.textContent = "启动倒计时";
@@ -1542,6 +1635,16 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       }).catch(() => showToast("无法播放，请检查手机媒体音量"));
     });
 
+    elements.nightQuietEnabled.addEventListener("change", () => {
+      nightQuietEnabled = elements.nightQuietEnabled.checked;
+      localStorage.setItem(NIGHT_QUIET_KEY, String(nightQuietEnabled));
+      if (isNightQuietTime()) {
+        stopAlarmAudio();
+        closeActivityNotifications();
+      }
+      scheduleDailyReminder();
+      showToast(nightQuietEnabled ? "夜间免打扰已开启" : "夜间免打扰已关闭");
+    });
     elements.dailyReminderButton.addEventListener("click", toggleDailyReminder);
     elements.dailyReminderTestButton.addEventListener("click", testDailyReminder);
     elements.hourlyReminderMinute.addEventListener("input", updateHourlyReminderMinute);
@@ -1582,6 +1685,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   initialize();
+  window.setInterval(updateHourActivity, 1000);
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
       if (event.data?.type === "activity-snooze" && Number.isFinite(event.data.deadline)) {
