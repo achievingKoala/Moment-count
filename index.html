@@ -685,7 +685,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   }
 
   function readHourlyReminderMinute() {
-    const value = Number(localStorage.getItem(HOURLY_REMINDER_MINUTE_KEY));
+    const savedValue = localStorage.getItem(HOURLY_REMINDER_MINUTE_KEY);
+    if (savedValue === null || savedValue.trim() === "") return DEFAULT_HOURLY_REMINDER_MINUTE;
+    const value = Number(savedValue);
     if (!Number.isInteger(value) || value < 0 || value > 59) return DEFAULT_HOURLY_REMINDER_MINUTE;
     return value;
   }
