@@ -562,8 +562,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
 
         <div class="daily-reminder">
           <div>
-            <strong>每小时提醒我活动一次</strong>
-            <p id="dailyReminderHint">每小时固定分钟检查，本小时完成一次有效活动后不再提醒</p>
+            <strong>每小时提醒我活动</strong>
+            <p id="dailyReminderHint">每小时提醒一次</p>
             <label class="hourly-minute-setting" for="hourlyReminderMinute">
               每小时第
               <input id="hourlyReminderMinute" type="number" inputmode="numeric" min="0" max="59" step="1" aria-label="每小时提醒分钟" />
@@ -637,7 +637,6 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   const HOURLY_REMINDER_MINUTE_KEY = "move-two-minutes.hourly-reminder-minute.v1";
   const NIGHT_QUIET_KEY = "move-two-minutes.night-quiet.v1";
   const DAILY_TARGET_COUNT = 8;
-  const DEFAULT_HOURLY_REMINDER_MINUTE = 50;
 
   const elements = {
     todayLabel: document.querySelector("#todayLabel"),
@@ -671,8 +670,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     activityMusic: document.querySelector("#activityMusic"),
     musicPreviewButton: document.querySelector("#musicPreviewButton"),
     alarmAudio: document.querySelector("#alarmAudio"),
-    nightQuietEnabled: document.querySelector("#nightQuietEnabled"),
     hourlyReminderMinute: document.querySelector("#hourlyReminderMinute"),
+    nightQuietEnabled: document.querySelector("#nightQuietEnabled"),
     dailyReminderButton: document.querySelector("#dailyReminderButton"),
     dailyReminderTestButton: document.querySelector("#dailyReminderTestButton"),
     dailyReminderHint: document.querySelector("#dailyReminderHint")
@@ -696,8 +695,9 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   let dailyReminderTimerId = null;
   let hourlyReminderCountdownTimerId = null;
   let countdownModeHidden = readCountdownModeHidden();
-  let hourlyReminderMinute = readHourlyReminderMinute();
   let hourlyAlarmRinging = false;
+  const savedMinute = Number(localStorage.getItem(HOURLY_REMINDER_MINUTE_KEY));
+  let hourlyReminderMinute = Number.isInteger(savedMinute) && savedMinute >= 0 && savedMinute <= 59 ? savedMinute : 0;
   let nightQuietEnabled = localStorage.getItem(NIGHT_QUIET_KEY) !== "false";
 
   function safeParse(key, fallback) {
@@ -754,18 +754,6 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     localStorage.setItem(COUNTDOWN_HIDDEN_KEY, countdownModeHidden ? "true" : "false");
   }
 
-  function readHourlyReminderMinute() {
-    const savedValue = localStorage.getItem(HOURLY_REMINDER_MINUTE_KEY);
-    if (savedValue === null || savedValue.trim() === "") return DEFAULT_HOURLY_REMINDER_MINUTE;
-    const value = Number(savedValue);
-    if (!Number.isInteger(value) || value < 0 || value > 59) return DEFAULT_HOURLY_REMINDER_MINUTE;
-    return value;
-  }
-
-  function saveHourlyReminderMinute() {
-    localStorage.setItem(HOURLY_REMINDER_MINUTE_KEY, String(hourlyReminderMinute));
-  }
-
   function renderCountdownMode() {
     const isHidden = countdownModeHidden && reminder === null && dailyReminder === null;
     elements.reminderCard.classList.toggle("is-countdown-hidden", isHidden);
@@ -786,10 +774,6 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   function hasActivityThisHour(comparison = Date.now()) {
     const key = hourlyKey(comparison);
     return records.some((record) => hourlyKey(record.endTime) === key);
-  }
-
-  function formatHourlyReminderMinute() {
-    return `${hourlyReminderMinute} 分`;
   }
 
   function isNightQuietTime(date = new Date()) {
@@ -814,16 +798,14 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     if (dailyReminder === null) {
       elements.dailyReminderButton.textContent = "开启每小时提醒";
       elements.dailyReminderButton.classList.remove("is-active");
-      elements.dailyReminderHint.textContent = `每小时 ${formatHourlyReminderMinute()}检查，本小时完成一次有效活动后不再提醒`;
+      elements.dailyReminderHint.textContent = `每小时第 ${hourlyReminderMinute} 分钟提醒`;
       return;
     }
     elements.dailyReminderButton.textContent = "关闭每小时提醒";
     elements.dailyReminderButton.classList.add("is-active");
     elements.dailyReminderHint.textContent = isNightQuietTime()
-      ? `夜间免打扰中，早上 08:${String(hourlyReminderMinute).padStart(2, "0")}恢复检查`
-      : hasActivityThisHour()
-      ? `本小时已完成，下个小时 ${formatHourlyReminderMinute()}继续检查`
-      : `已开启，每小时 ${formatHourlyReminderMinute()}提醒`;
+      ? `夜间免打扰中，早上 08:${pad(hourlyReminderMinute)} 恢复提醒`
+      : `已开启，每小时第 ${hourlyReminderMinute} 分钟提醒`;
   }
 
   function scheduleDailyReminder() {
@@ -923,7 +905,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
   function fireDailyReminder() {
     if (dailyReminder === null) return;
     const hour = hourlyKey(Date.now());
-    if (!isNightQuietTime() && !hasActivityThisHour() && dailyReminder.lastNotifiedHour !== hour) {
+    if (!isNightQuietTime() && dailyReminder.lastNotifiedHour !== hour) {
       dailyReminder.lastNotifiedHour = hour;
       saveDailyReminder();
       showToast("该站起来活动两分钟啦");
@@ -1031,20 +1013,6 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     showActivityNotification();
   }
 
-  function updateHourlyReminderMinute() {
-    if (elements.hourlyReminderMinute.value === "") return;
-    const value = Number(elements.hourlyReminderMinute.value);
-    if (!Number.isInteger(value) || value < 0 || value > 59) {
-      elements.hourlyReminderMinute.value = String(hourlyReminderMinute);
-      showToast("请输入 0–59 分钟");
-      return;
-    }
-    hourlyReminderMinute = value;
-    saveHourlyReminderMinute();
-    scheduleDailyReminder();
-    showToast(`每小时第 ${formatHourlyReminderMinute()}提醒`);
-  }
-
   function saveRecords() {
     localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
   }
@@ -1115,7 +1083,7 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     document.querySelector("#hourActivityStatus").textContent = completed
       ? "本小时已完成" : "本小时未完成";
     document.querySelector("#hourActivity").title = completed
-      ? "本小时已记录有效活动，无需再提醒" : "活动满 2 分钟并结束后计入";
+      ? "本小时已记录有效活动，每小时仍会提醒" : "活动满 2 分钟并结束后计入";
   }
 
   function updateToday() {
@@ -1343,10 +1311,8 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
     elements.reminderStatus.textContent = isNightQuietTime() ? "夜间免打扰" : "每小时提醒";
     elements.reminderStatus.classList.add("is-active");
     elements.reminderHint.textContent = isNightQuietTime()
-      ? "22:00–次日 08:00 暂停每小时提醒，倒计时到早晨下次检查"
-      : hasActivityThisHour()
-      ? "本小时已完成，倒计时到下次检查"
-      : "倒计时结束时，会检查本小时是否已经活动";
+      ? `22:00–次日 08:00 暂停每小时提醒，下次提醒 08:${pad(hourlyReminderMinute)}`
+      : "";
     elements.reminderButton.textContent = "启动倒计时";
     elements.reminderButton.classList.remove("is-active", "is-ringing");
     setReminderControlsDisabled(false);
@@ -1645,10 +1611,19 @@ h2 { margin-bottom: 0; font-size: 1.3rem; letter-spacing: -0.025em; }
       scheduleDailyReminder();
       showToast(nightQuietEnabled ? "夜间免打扰已开启" : "夜间免打扰已关闭");
     });
+    elements.hourlyReminderMinute.addEventListener("change", () => {
+      const value = Number(elements.hourlyReminderMinute.value);
+      if (elements.hourlyReminderMinute.value === "" || !Number.isInteger(value) || value < 0 || value > 59) {
+        elements.hourlyReminderMinute.value = String(hourlyReminderMinute);
+        showToast("请输入 0–59 分钟");
+        return;
+      }
+      hourlyReminderMinute = value;
+      localStorage.setItem(HOURLY_REMINDER_MINUTE_KEY, String(value));
+      scheduleDailyReminder();
+    });
     elements.dailyReminderButton.addEventListener("click", toggleDailyReminder);
     elements.dailyReminderTestButton.addEventListener("click", testDailyReminder);
-    elements.hourlyReminderMinute.addEventListener("input", updateHourlyReminderMinute);
-    elements.hourlyReminderMinute.addEventListener("change", updateHourlyReminderMinute);
 
     document.addEventListener("visibilitychange", () => {
       syncActivityPresence();
