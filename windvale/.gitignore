@@ -16,3 +16,8 @@ npm-debug.log*
 
 # Unused Sites registration from the original prototype
 /.openai/hosting.json
+
+/cafe-walk.html
+
+/market-walk.html
+/play.html
