@@ -3,7 +3,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 
 // Keep development files separate, and generate a portable file for direct opening.
 await build({entryPoints:['src/main.js'],bundle:true,format:'esm',target:'es2022',outfile:'app.js',sourcemap:true});
-const filenames=['AnimationLibrary.glb','sample.vrm','sample2.vrm','AvatarSample_A.vrm','Farmer.glb','Adventurer.glb'];
+const filenames=['Farmer.glb','Adventurer.glb','WomenMedieval.glb','WomenPunk.glb','WomenSuit.glb'];
 const embedded={};
 for(const filename of filenames){
   embedded[filename]='data:model/gltf-binary;base64,'+(await readFile('assets/'+filename)).toString('base64');
@@ -18,7 +18,7 @@ for(const filename of filenames){
     .replaceAll("'./assets/"+filename+"'",`EMBEDDED_ASSETS[${JSON.stringify(filename)}]`);
 }
 // Only embed models used in this scene; the other scene entries have their own assets.
-const usedNames=scene==='market'?['Adventurer.glb','Farmer.glb']:scene==='cafe'?['AnimationLibrary.glb','Adventurer.glb','sample2.vrm']:['AnimationLibrary.glb','sample.vrm','sample2.vrm','AvatarSample_A.vrm','Farmer.glb'];
+const usedNames=scene==='market'?['Adventurer.glb','Farmer.glb']:scene==='cafe'?['Adventurer.glb','WomenSuit.glb']:['Adventurer.glb','WomenMedieval.glb','WomenPunk.glb','Farmer.glb'];
 source='const EMBEDDED_ASSETS='+JSON.stringify(Object.fromEntries(usedNames.map(name=>[name,embedded[name]])))+';\n'+source;
 const result=await build({stdin:{contents:source,resolveDir:process.cwd()+'/src',sourcefile:'offline-entry.js',loader:'js'},bundle:true,format:'esm',target:'es2022',write:false,minify:true,legalComments:'inline'});
 const script=result.outputFiles[0].text.replace(/<\/script/gi,'<\\/script');
