@@ -23482,7 +23482,7 @@ function createMarket({ scene, obstacles, clouds, box, cyl, mesh, mat, wood, wal
     }
     for (const dx of [-1.6, 0, 1.6]) obstacles.push({ x: x + dx, z, r: 1.15 });
   }
-  stall(-7, 10, red, "FRESH FRUIT");
+  stall(-7, 10, red, "OLIVER \xB7 FRESH FRUIT");
   stall(7, 6, mat("#73977d"), "GARDEN GREENS");
   stall(-7, -1, mat("#bda46e"), "BREAD & HONEY");
   for (const x of [-13, 13]) for (const z of [-9, 1, 15]) {
@@ -23503,8 +23503,6 @@ function createMarket({ scene, obstacles, clouds, box, cyl, mesh, mat, wood, wal
   for (const x of [5.5, 8.5]) box(0.15, 0.65, 0.6, wood, x, 0.32, 16);
   obstacles.push({ x: 7, z: 16, r: 2 });
   cyl(0.7, 0.8, 0.85, stone, 4, 0.43, -7);
-  box(0.12, 2, 0.12, wood, 3.8, 1, 14);
-  label("OLIVER \xB7 E TO TALK", 3.8, 1.9, 14.1, 2.4);
 }
 
 // node_modules/three/examples/jsm/utils/BufferGeometryUtils.js
@@ -26127,10 +26125,10 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
       }
     }
   }, nearestNpc = function() {
-    let nearest = null, distance = isCafe ? 3.5 : 2.8;
+    let nearest = null, distance = Infinity;
     for (const npc of villagers) {
       const d = Math.hypot(pos.x - npc.body.position.x, pos.z - npc.body.position.z);
-      if (d < distance) {
+      if (d < (npc.talkDistance || (isCafe ? 3.5 : 2.8)) && d < distance) {
         distance = d;
         nearest = npc;
       }
@@ -26629,7 +26627,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     if (!isCafe) {
       const body = new Group();
       scene.add(body);
-      body.position.set(isMarket ? 0 : 5, 0, isMarket ? 14 : 0);
+      body.position.set(isMarket ? -7 : 5, 0, isMarket ? 8.3 : 0);
       const gltf = await loader.loadAsync("./assets/Farmer.glb");
       const model = gltf.scene;
       makeCharacterMatte(model);
@@ -26649,7 +26647,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
       const idle = gltf.animations.find((clip) => /\|Idle$/.test(clip.name));
       if (!idle) throw Error("Farmer idle animation missing");
       farmerMixer.clipAction(idle).play();
-      villagers.push({ body, person: { mixer: farmerMixer }, voiceGender: "male", name: isMarket ? "Oliver \xB7 \u519C\u592B" : "\u6797\u53D4 \xB7 \u516C\u56ED\u8BDD\u9898", facingOffset: Math.PI, line: 0, lines: [], questions: isMarket ? null : parkQuestions, topic: isMarket ? null : "\u516C\u56ED / \u6563\u6B65 / \u6237\u5916\u6D3B\u52A8" });
+      villagers.push({ body, person: { mixer: farmerMixer }, voiceGender: "male", talkDistance: isMarket ? 4 : 2.8, name: isMarket ? "Oliver \xB7 \u519C\u592B" : "\u6797\u53D4 \xB7 \u516C\u56ED\u8BDD\u9898", facingOffset: Math.PI, line: 0, lines: [], questions: isMarket ? null : parkQuestions, topic: isMarket ? null : "\u516C\u56ED / \u6563\u6B65 / \u6237\u5916\u6D3B\u52A8" });
     }
     characterReady = true;
     startButton.disabled = false;

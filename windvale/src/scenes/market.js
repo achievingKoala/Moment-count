@@ -30,7 +30,7 @@ export function createMarket({scene,obstacles,clouds,box,cyl,mesh,mat,wood,wall,
     // Overlapping footprints keep the player outside the long counters.
     for(const dx of [-1.6,0,1.6])obstacles.push({x:x+dx,z,r:1.15});
   }
-  stall(-7,10,red,'FRESH FRUIT');stall(7,6,mat('#73977d'),'GARDEN GREENS');
+  stall(-7,10,red,'OLIVER · FRESH FRUIT');stall(7,6,mat('#73977d'),'GARDEN GREENS');
   stall(-7,-1,mat('#bda46e'),'BREAD & HONEY');
   for(const x of [-13,13])for(const z of [-9,1,15]){
     cyl(.2,.28,2.2,wood,x,1.1,z);mesh(new IcosahedronGeometry(1.7,1),leaf,x,3,z);obstacles.push({x,z,r:.6});
@@ -39,5 +39,5 @@ export function createMarket({scene,obstacles,clouds,box,cyl,mesh,mat,wood,wall,
   for(const x of [-16,16]){box(.18,1.4,35,wood,x,.7,4);for(const z of [-13,-6,1,8,15,21])cyl(.12,.15,1.8,wood,x,.9,z);}
   box(4,.15,.7,wood,7,.65,16);box(4,.6,.12,wood,7,1,15.7);for(const x of [5.5,8.5])box(.15,.65,.6,wood,x,.32,16);
   obstacles.push({x:7,z:16,r:2});
-  cyl(.7,.8,.85,stone,4,.43,-7);box(.12,2,.12,wood,3.8,1,14);label('OLIVER · E TO TALK',3.8,1.9,14.1,2.4);
+  cyl(.7,.8,.85,stone,4,.43,-7);
 }

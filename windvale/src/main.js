@@ -97,20 +97,20 @@ try{const player=await loadAdventurerPlayer();mixer=player.mixer;Object.assign(a
 const npcModels=isMarket?[]:isCafe?[['./assets/WomenSuit.glb',[[5,-1]]]]:[['./assets/WomenMedieval.glb',[[5,2],[5,10],[9,10],[9,2]]],['./assets/WomenPunk.glb',[[-4,-12],[-4,-20],[-6,-20],[-6,-12]]]];
 for(const [url,route] of npcModels){const body=new Group();scene.add(body);body.position.set(route[0][0],0,route[0][1]);const person=await loadPerson(url,body);person.actions.idle.setEffectiveWeight(1);person.actions.walk.setEffectiveWeight(0);person.actions.walk.setEffectiveTimeScale(.65);const index=villagers.length;body.position.set(index===0?3:-3,0,index===0?14:5);if(isCafe){body.position.set(5,0,-.65);body.rotation.y=Math.PI;}villagers.push({body,person,voiceGender:'female',name:index===0?'小禾':'阿岚',line:0,lines:index===0?['你好呀，欢迎来到风栖村。我叫小禾。你可以在村里慢慢逛逛。','前面广场上有一口老井，风车就在更远的地方。沿着小路走就能看到。']:['你好，我是阿岚。今天的天气真不错，很适合出来散步。','这里没有赶时间的事。累了就停下来，看看树，听听风。']});}
 if(!isCafe){
-const body=new Group();scene.add(body);body.position.set(isMarket?0:5,0,isMarket?14:0);
+const body=new Group();scene.add(body);body.position.set(isMarket?-7:5,0,isMarket?8.3:0);
 const gltf=await loader.loadAsync('./assets/Farmer.glb');const model=gltf.scene;
 makeCharacterMatte(model);
 model.traverse(object=>{if(object.isMesh){object.castShadow=true;object.receiveShadow=false;object.frustumCulled=false;}});
 const bounds=new Box3().setFromObject(model);const scale=1.95/(bounds.max.y-bounds.min.y);model.scale.setScalar(scale);model.position.y=-bounds.min.y*scale;body.add(model);
 const farmerMixer=new AnimationMixer(model);const idle=gltf.animations.find(clip=>/\|Idle$/.test(clip.name));if(!idle)throw Error('Farmer idle animation missing');farmerMixer.clipAction(idle).play();
-villagers.push({body,person:{mixer:farmerMixer},voiceGender:'male',name:isMarket?'Oliver · 农夫':'林叔 · 公园话题',facingOffset:Math.PI,line:0,lines:[],questions:isMarket?null:parkQuestions,topic:isMarket?null:'公园 / 散步 / 户外活动'});
+villagers.push({body,person:{mixer:farmerMixer},voiceGender:'male',talkDistance:isMarket?4:2.8,name:isMarket?'Oliver · 农夫':'林叔 · 公园话题',facingOffset:Math.PI,line:0,lines:[],questions:isMarket?null:parkQuestions,topic:isMarket?null:'公园 / 散步 / 户外活动'});
 }
 characterReady=true;startButton.disabled=false;startButton.textContent=isMarket?'进入集市 →':isCafe?'进入咖啡馆 →':'开始漫步 →';
 }catch(error){console.error(error);startButton.textContent='加载失败，点击重试';startButton.disabled=false;startButton.onclick=()=>location.reload();document.querySelector('.card p').textContent='请通过本地网页地址打开，并确认 assets 文件夹完整。';}
 function updateVillagers(dt){for(const npc of villagers){npc.person.mixer.update(dt);if(dialogNpc===npc){const dx=pos.x-npc.body.position.x,dz=pos.z-npc.body.position.z;const angle=Math.atan2(-dx,-dz)+(npc.facingOffset||0);npc.body.rotation.y+=Math.atan2(Math.sin(angle-npc.body.rotation.y),Math.cos(angle-npc.body.rotation.y))*(1-Math.exp(-dt*6));}}}
 let dialogNpc=null,speakingNpc=null,speechToken=0,currentUtterance=null;
 const talkButton=document.getElementById('talk'),dialog=document.getElementById('dialog'),voiceStatus=document.getElementById('voice-status');
-function nearestNpc(){let nearest=null,distance=isCafe?3.5:2.8;for(const npc of villagers){const d=Math.hypot(pos.x-npc.body.position.x,pos.z-npc.body.position.z);if(d<distance){distance=d;nearest=npc;}}return nearest;}
+function nearestNpc(){let nearest=null,distance=Infinity;for(const npc of villagers){const d=Math.hypot(pos.x-npc.body.position.x,pos.z-npc.body.position.z);if(d<(npc.talkDistance||(isCafe?3.5:2.8))&&d<distance){distance=d;nearest=npc;}}return nearest;}
 function stopSpeech(){speechToken++;speakingNpc=null;currentUtterance=null;if('speechSynthesis' in window)window.speechSynthesis.cancel();}
 function closeDialog(){feedbackController.cancel();stopSpeech();dialogNpc=null;dialog.hidden=true;keys.clear();renderGreetingQuest();}
 function speakLine(npc,text){stopSpeech();const token=speechToken;voiceStatus.textContent='';if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance){voiceStatus.textContent='当前浏览器不支持语音，请阅读字幕。';return;}
