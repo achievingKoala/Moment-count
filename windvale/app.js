@@ -4,16 +4,16 @@ function questionsForScene(scene) {
   return isMarket ? ["Do you enjoy shopping for food?", "How often do you eat fruit and vegetables?", "Do you prefer shopping at markets or supermarkets?", "Do you like cooking at home?", "What do you usually do at weekends?", "Do you prefer spending time indoors or outdoors?"] : isCafe ? ["Do you prefer tea or coffee?", "What do you usually have for breakfast?", "Do you often go to caf\xE9s with your friends?", "What do you like to do when you meet your friends?", "Do you prefer eating at home or eating out?", "What do you usually do in the morning?"] : ["What do you like to do in your free time?"];
 }
 var practiceHints = {
-  "What do you like to do in your free time?": "Name an activity you enjoy \u2192 Say when or where you do it \u2192 Explain why you enjoy it.",
-  "Do you often go to parks?": "Say how often you go \u2192 Mention who you go with \u2192 Explain why you like going there.",
-  "What do you usually do when you visit a park?": "Name one or two activities \u2192 Add a detail about your usual visit \u2192 Describe how you feel.",
-  "Do you prefer going to parks alone or with friends?": "State your preference \u2192 Give a reason \u2192 Mention an activity you enjoy doing there.",
-  "Do you prefer tea or coffee?": "State your preference \u2192 Explain what you like about it \u2192 Say when you usually drink it.",
-  "What do you usually have for breakfast?": "Name your usual food and drink \u2192 Explain why you choose them \u2192 Say whether weekends are different.",
-  "Do you often go to caf\xE9s with your friends?": "Say how often you go \u2192 Mention when you usually meet \u2192 Describe what you do together.",
-  "Do you enjoy shopping for food?": "Say yes or no \u2192 Explain why \u2192 Give a detail from your usual shopping routine.",
-  "How often do you eat fruit and vegetables?": "Say how often \u2192 Give examples of what you eat \u2192 Mention which meals you have them with.",
-  "Do you prefer shopping at markets or supermarkets?": "Choose one \u2192 Explain your reason, such as price or convenience \u2192 Add a detail about your shopping habits."
+  "What do you like to do in your free time?": "Name an activity you enjoy \u2192 Say when or where you do it \u2192 Explain why you enjoy it. Example: I enjoy reading. I usually read at home before bed because it helps me relax.",
+  "Do you often go to parks?": "Say how often you go \u2192 Mention who you go with \u2192 Explain why you like going there. Example: I go to the park every Sunday with my family because we enjoy the fresh air.",
+  "What do you usually do when you visit a park?": "Name one or two activities \u2192 Add a detail about your usual visit \u2192 Describe how you feel. Example: I usually take a walk in the park. I often walk around the lake, and I feel relaxed afterwards.",
+  "Do you prefer going to parks alone or with friends?": "State your preference \u2192 Give a reason \u2192 Mention an activity you enjoy doing there. Example: I prefer going with friends because we can chat. We usually take a walk together.",
+  "Do you prefer tea or coffee?": "State your preference \u2192 Explain what you like about it \u2192 Say when you usually drink it. Example: I prefer tea because I like its light taste. I usually drink it after breakfast.",
+  "What do you usually have for breakfast?": "Name your usual food and drink \u2192 Explain why you choose them \u2192 Say whether weekends are different. Example: I usually have eggs and milk because they are easy to prepare. At weekends, I sometimes have noodles instead.",
+  "Do you often go to caf\xE9s with your friends?": "Say how often you go \u2192 Mention when you usually meet \u2192 Describe what you do together. Example: I go to caf\xE9s with my friends about once a month. We usually meet at weekends and chat over coffee.",
+  "Do you enjoy shopping for food?": "Say yes or no \u2192 Explain why \u2192 Give a detail from your usual shopping routine. Example: Yes, I enjoy shopping for food because I like choosing fresh fruit. I usually buy apples at the market on Sundays.",
+  "How often do you eat fruit and vegetables?": "Say how often \u2192 Give examples of what you eat \u2192 Mention which meals you have them with. Example: I eat fruit and vegetables every day. I usually have a banana with breakfast and carrots with lunch.",
+  "Do you prefer shopping at markets or supermarkets?": "Choose one \u2192 Explain your reason, such as price or convenience \u2192 Add a detail about your shopping habits. Example: I prefer supermarkets because they are convenient. I usually buy everything I need in one visit."
 };
 var parkQuestions = ["Do you often go to parks?", "What do you usually do when you visit a park?", "Do you prefer going to parks alone or with friends?", "Did you go to parks when you were a child?", "Is there a park near your home?", "Would you like to spend more time in parks?"];
 
@@ -26,6 +26,25 @@ function selectCharacterVoice(voices, gender, english) {
   const preferred = gender === "female" ? femaleNames : maleNames;
   const opposite = gender === "female" ? maleNames : femaleNames;
   return candidates.filter((voice) => preferred.test(voice.name) && !opposite.test(voice.name)).sort((a, b) => Number(b.localService) - Number(a.localService))[0] || null;
+}
+function waitForCharacterVoice(synth, gender, english, timeoutMs = 2e3) {
+  const current = selectCharacterVoice(synth.getVoices(), gender, english);
+  if (current) return Promise.resolve(current);
+  return new Promise((resolve) => {
+    let timer;
+    function finish(voice) {
+      clearTimeout(timer);
+      synth.removeEventListener("voiceschanged", changed);
+      resolve(voice);
+    }
+    function changed() {
+      const voice = selectCharacterVoice(synth.getVoices(), gender, english);
+      if (voice) finish(voice);
+    }
+    synth.addEventListener("voiceschanged", changed);
+    timer = setTimeout(() => finish(selectCharacterVoice(synth.getVoices(), gender, english)), timeoutMs);
+    changed();
+  });
 }
 
 // src/practice-history.js
@@ -98,6 +117,12 @@ function createFeedbackController({ input, onApply, fetcher = fetch }) {
     cardIndex = Math.max(0, Math.min(cardIndex, records.length - 1));
     syncExpanded();
     content.replaceChildren();
+    previous.hidden = next.hidden = counter.hidden = Boolean(activeRecord);
+    if (activeRecord) {
+      previous.disabled = next.disabled = true;
+      status.textContent = "AI \u6B63\u5728\u70B9\u8BC4\u4F60\u7684\u6587\u5B57\u56DE\u7B54\u2026";
+      return;
+    }
     previous.disabled = cardIndex >= records.length - 1;
     next.disabled = cardIndex === 0;
     counter.textContent = records.length ? `${records.length - cardIndex} / ${records.length}` : "\u6682\u65E0\u8BB0\u5F55";
@@ -111,10 +136,12 @@ function createFeedbackController({ input, onApply, fetcher = fetch }) {
     if (record.feedback) renderFeedback(record.feedback);
   }
   previous.onclick = () => {
+    if (activeRecord) return;
     cardIndex++;
     renderHistory();
   };
   next.onclick = () => {
+    if (activeRecord) return;
     cardIndex--;
     renderHistory();
   };
@@ -26146,42 +26173,6 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     dialog.hidden = true;
     keys.clear();
     renderGreetingQuest();
-  }, speakLine = function(npc, text) {
-    stopSpeech();
-    const token = speechToken;
-    voiceStatus.textContent = "";
-    if (!("speechSynthesis" in window) || !window.SpeechSynthesisUtterance) {
-      voiceStatus.textContent = "\u5F53\u524D\u6D4F\u89C8\u5668\u4E0D\u652F\u6301\u8BED\u97F3\uFF0C\u8BF7\u9605\u8BFB\u5B57\u5E55\u3002";
-      return;
-    }
-    const synth = window.speechSynthesis, utterance = new SpeechSynthesisUtterance(text);
-    currentUtterance = utterance;
-    const english = isPracticeNpc(npc);
-    const voice = selectCharacterVoice(synth.getVoices(), npc.voiceGender, english);
-    utterance.lang = english ? "en-GB" : "zh-CN";
-    if (voice) utterance.voice = voice;
-    utterance.rate = 0.95;
-    utterance.pitch = npc.voiceGender === "female" ? 1.08 : 0.94;
-    utterance.onstart = () => {
-      if (token !== speechToken) return;
-      speakingNpc = npc;
-      voiceStatus.textContent = "\u6B63\u5728\u8BF4\u8BDD\u2026";
-    };
-    utterance.onend = () => {
-      if (token !== speechToken) return;
-      speakingNpc = null;
-      currentUtterance = null;
-      voiceStatus.textContent = "";
-    };
-    utterance.onerror = () => {
-      if (token !== speechToken) return;
-      speakingNpc = null;
-      voiceStatus.textContent = "\u8BED\u97F3\u672A\u80FD\u64AD\u653E\uFF0C\u53EF\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\uFF0C\u5E76\u68C0\u67E5\u7CFB\u7EDF\u8BED\u97F3\u3002";
-    };
-    synth.speak(utterance);
-    setTimeout(() => {
-      if (token === speechToken && currentUtterance === utterance && !speakingNpc) voiceStatus.textContent = "\u5982\u679C\u6CA1\u6709\u58F0\u97F3\uFF0C\u8BF7\u68C0\u67E5\u97F3\u91CF\u548C\u7CFB\u7EDF\u8BED\u97F3\uFF0C\u6216\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\u3002";
-    }, 3500);
   }, questionsForNpc = function() {
     const questions = dialogNpc?.questions || defaultPracticeQuestions;
     return questions.slice(0, Math.ceil(questions.length / 2));
@@ -26661,6 +26652,50 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
   }
   let dialogNpc = null, speakingNpc = null, speechToken = 0, currentUtterance = null;
   const talkButton = document.getElementById("talk"), dialog = document.getElementById("dialog"), voiceStatus = document.getElementById("voice-status");
+  async function speakLine(npc, text) {
+    stopSpeech();
+    const token = speechToken;
+    voiceStatus.textContent = "";
+    if (!("speechSynthesis" in window) || !window.SpeechSynthesisUtterance) {
+      voiceStatus.textContent = "\u5F53\u524D\u6D4F\u89C8\u5668\u4E0D\u652F\u6301\u8BED\u97F3\uFF0C\u8BF7\u9605\u8BFB\u5B57\u5E55\u3002";
+      return;
+    }
+    const synth = window.speechSynthesis, utterance = new SpeechSynthesisUtterance(text);
+    currentUtterance = utterance;
+    const english = isPracticeNpc(npc);
+    voiceStatus.textContent = "\u6B63\u5728\u51C6\u5907\u89D2\u8272\u8BED\u97F3\u2026";
+    const voice = await waitForCharacterVoice(synth, npc.voiceGender, english);
+    if (token !== speechToken) return;
+    if (!voice) {
+      currentUtterance = null;
+      voiceStatus.textContent = "\u672A\u627E\u5230\u5339\u914D\u7684\u89D2\u8272\u8BED\u97F3\uFF0C\u8BF7\u5B89\u88C5\u5BF9\u5E94\u7684\u7CFB\u7EDF\u7537\u58F0\u6216\u5973\u58F0\u540E\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\u3002";
+      return;
+    }
+    utterance.lang = english ? "en-GB" : "zh-CN";
+    if (voice) utterance.voice = voice;
+    utterance.rate = 0.95;
+    utterance.pitch = npc.voiceGender === "female" ? 1.08 : 0.94;
+    utterance.onstart = () => {
+      if (token !== speechToken) return;
+      speakingNpc = npc;
+      voiceStatus.textContent = "\u6B63\u5728\u8BF4\u8BDD\u2026";
+    };
+    utterance.onend = () => {
+      if (token !== speechToken) return;
+      speakingNpc = null;
+      currentUtterance = null;
+      voiceStatus.textContent = "";
+    };
+    utterance.onerror = () => {
+      if (token !== speechToken) return;
+      speakingNpc = null;
+      voiceStatus.textContent = "\u8BED\u97F3\u672A\u80FD\u64AD\u653E\uFF0C\u53EF\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\uFF0C\u5E76\u68C0\u67E5\u7CFB\u7EDF\u8BED\u97F3\u3002";
+    };
+    synth.speak(utterance);
+    setTimeout(() => {
+      if (token === speechToken && currentUtterance === utterance && !speakingNpc) voiceStatus.textContent = "\u5982\u679C\u6CA1\u6709\u58F0\u97F3\uFF0C\u8BF7\u68C0\u67E5\u97F3\u91CF\u548C\u7CFB\u7EDF\u8BED\u97F3\uFF0C\u6216\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\u3002";
+    }, 3500);
+  }
   const defaultPracticeQuestions = questionsForScene(sceneName);
   let practiceIndex = 0;
   const practiceAnswers = {};

@@ -17,6 +17,12 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
     cardIndex = Math.max(0, Math.min(cardIndex, records.length - 1));
     syncExpanded();
     content.replaceChildren();
+    previous.hidden = next.hidden = counter.hidden = Boolean(activeRecord);
+    if (activeRecord) {
+      previous.disabled = next.disabled = true;
+      status.textContent = 'AI 正在点评你的文字回答…';
+      return;
+    }
     previous.disabled = cardIndex >= records.length - 1;
     next.disabled = cardIndex === 0;
     counter.textContent = records.length ? `${records.length - cardIndex} / ${records.length}` : '暂无记录';
@@ -26,8 +32,8 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
     paragraph('本次回答：' + record.answer);
     if (record.feedback) renderFeedback(record.feedback);
   }
-  previous.onclick = () => { cardIndex++; renderHistory(); };
-  next.onclick = () => { cardIndex--; renderHistory(); };
+  previous.onclick = () => { if (activeRecord) return; cardIndex++; renderHistory(); };
+  next.onclick = () => { if (activeRecord) return; cardIndex--; renderHistory(); };
   let sequence = 0, controller = null;
   function clearPendingRecord() { if(activeRecord){history.update(activeRecord,{status:'请求已中断，可重新提交'});activeRecord=null;renderHistory();} }
   function cancel() { if(activeRecord){history.update(activeRecord,{status:'请求已中断，可重新提交'});activeRecord=null;renderHistory();} sequence++; controller?.abort(); controller = null; submit.disabled = false; submit.textContent = '提交回答并获取反馈'; panel.hidden = true; status.textContent = ''; content.replaceChildren(); }

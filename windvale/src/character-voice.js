@@ -9,3 +9,24 @@ export function selectCharacterVoice(voices, gender, english) {
   return candidates.filter(voice => preferred.test(voice.name) && !opposite.test(voice.name))
     .sort((a,b) => Number(b.localService)-Number(a.localService))[0] || null;
 }
+
+// 首次调用时系统可能还没返回语音列表，等待匹配语音，避免使用默认声音。
+export function waitForCharacterVoice(synth, gender, english, timeoutMs = 2000) {
+  const current = selectCharacterVoice(synth.getVoices(), gender, english);
+  if (current) return Promise.resolve(current);
+  return new Promise(resolve => {
+    let timer;
+    function finish(voice) {
+      clearTimeout(timer);
+      synth.removeEventListener('voiceschanged', changed);
+      resolve(voice);
+    }
+    function changed() {
+      const voice = selectCharacterVoice(synth.getVoices(), gender, english);
+      if (voice) finish(voice);
+    }
+    synth.addEventListener('voiceschanged', changed);
+    timer = setTimeout(() => finish(selectCharacterVoice(synth.getVoices(), gender, english)), timeoutMs);
+    changed();
+  });
+}

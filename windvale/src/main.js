@@ -1,5 +1,5 @@
 import {questionsForScene,practiceHints,parkQuestions} from './practice-content.js';
-import {selectCharacterVoice} from './character-voice.js';
+import {waitForCharacterVoice} from './character-voice.js';
 import {createFeedbackController} from './speaking-feedback.js';
 import {createGreetingQuest,GREETING_QUEST_KEY} from './greeting-quest.js';
 import {createMarket} from './scenes/market.js';
@@ -113,8 +113,8 @@ const talkButton=document.getElementById('talk'),dialog=document.getElementById(
 function nearestNpc(){let nearest=null,distance=Infinity;for(const npc of villagers){const d=Math.hypot(pos.x-npc.body.position.x,pos.z-npc.body.position.z);if(d<(npc.talkDistance||(isCafe?3.5:2.8))&&d<distance){distance=d;nearest=npc;}}return nearest;}
 function stopSpeech(){speechToken++;speakingNpc=null;currentUtterance=null;if('speechSynthesis' in window)window.speechSynthesis.cancel();}
 function closeDialog(){feedbackController.cancel();stopSpeech();dialogNpc=null;dialog.hidden=true;keys.clear();renderGreetingQuest();}
-function speakLine(npc,text){stopSpeech();const token=speechToken;voiceStatus.textContent='';if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance){voiceStatus.textContent='当前浏览器不支持语音，请阅读字幕。';return;}
-const synth=window.speechSynthesis,utterance=new SpeechSynthesisUtterance(text);currentUtterance=utterance;const english=isPracticeNpc(npc);const voice=selectCharacterVoice(synth.getVoices(),npc.voiceGender,english);utterance.lang=english?'en-GB':'zh-CN';if(voice)utterance.voice=voice;utterance.rate=.95;utterance.pitch=npc.voiceGender==='female'?1.08:.94;
+async function speakLine(npc,text){stopSpeech();const token=speechToken;voiceStatus.textContent='';if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance){voiceStatus.textContent='当前浏览器不支持语音，请阅读字幕。';return;}
+const synth=window.speechSynthesis,utterance=new SpeechSynthesisUtterance(text);currentUtterance=utterance;const english=isPracticeNpc(npc);voiceStatus.textContent='正在准备角色语音…';const voice=await waitForCharacterVoice(synth,npc.voiceGender,english);if(token!==speechToken)return;if(!voice){currentUtterance=null;voiceStatus.textContent='未找到匹配的角色语音，请安装对应的系统男声或女声后点击“再听一遍”。';return;}utterance.lang=english?'en-GB':'zh-CN';if(voice)utterance.voice=voice;utterance.rate=.95;utterance.pitch=npc.voiceGender==='female'?1.08:.94;
 utterance.onstart=()=>{if(token!==speechToken)return;speakingNpc=npc;voiceStatus.textContent='正在说话…';};utterance.onend=()=>{if(token!==speechToken)return;speakingNpc=null;currentUtterance=null;voiceStatus.textContent='';};utterance.onerror=()=>{if(token!==speechToken)return;speakingNpc=null;voiceStatus.textContent='语音未能播放，可点击“再听一遍”，并检查系统语音。';};synth.speak(utterance);setTimeout(()=>{if(token===speechToken&&currentUtterance===utterance&&!speakingNpc)voiceStatus.textContent='如果没有声音，请检查音量和系统语音，或点击“再听一遍”。';},3500);}
 const defaultPracticeQuestions=questionsForScene(sceneName);
 let practiceIndex=0;
