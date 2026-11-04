@@ -1,3 +1,159 @@
+// src/npc-walk.js
+function updateNpcWalk(npc, dt, paused) {
+  if (!npc.walkRoute) return;
+  let moving = !paused;
+  if (moving) {
+    const target = npc.walkRoute[npc.walkIndex || 0];
+    const dx = target[0] - npc.body.position.x, dz = target[1] - npc.body.position.z;
+    const distance = Math.hypot(dx, dz), travel = Math.min(distance, 0.8 * dt);
+    if (distance > 0.01) {
+      npc.body.position.x += dx / distance * travel;
+      npc.body.position.z += dz / distance * travel;
+      const angle = Math.atan2(-dx, -dz) + (npc.facingOffset || 0);
+      npc.body.rotation.y += Math.atan2(Math.sin(angle - npc.body.rotation.y), Math.cos(angle - npc.body.rotation.y)) * (1 - Math.exp(-dt * 7));
+    }
+    if (distance <= travel + 0.01) npc.walkIndex = ((npc.walkIndex || 0) + 1) % npc.walkRoute.length;
+  }
+  const actions = npc.person.actions;
+  const amount = actions.walk.getEffectiveWeight() + ((moving ? 1 : 0) - actions.walk.getEffectiveWeight()) * (1 - Math.exp(-dt * 10));
+  actions.walk.setEffectiveWeight(amount);
+  actions.idle.setEffectiveWeight(1 - amount);
+}
+
+// src/background-music.js
+function createBackgroundMusic(button, scope = window) {
+  let context, output, timer, nextTime = 0, step = 0;
+  let enabled = true, started = false, ducked = false;
+  try {
+    enabled = scope.localStorage.getItem("windvale.bgm") !== "off";
+  } catch {
+  }
+  const melody = [
+    72,
+    null,
+    76,
+    79,
+    76,
+    null,
+    74,
+    72,
+    69,
+    null,
+    72,
+    76,
+    74,
+    null,
+    72,
+    67,
+    65,
+    null,
+    69,
+    72,
+    76,
+    null,
+    74,
+    72,
+    67,
+    null,
+    71,
+    74,
+    72,
+    null,
+    71,
+    67
+  ];
+  const chords = [[48, 52, 55], [45, 48, 52], [41, 45, 48], [43, 47, 50]];
+  function label() {
+    button.textContent = enabled ? "\u266B \u97F3\u4E50\uFF1A\u5F00" : "\u266B \u97F3\u4E50\uFF1A\u5173";
+    button.setAttribute("aria-pressed", String(enabled));
+  }
+  function note(midi, time, duration, volume2) {
+    const oscillator = context.createOscillator(), gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(volume2, time + 0.04);
+    gain.gain.exponentialRampToValueAtTime(1e-4, time + duration);
+    oscillator.connect(gain);
+    gain.connect(output);
+    oscillator.start(time);
+    oscillator.stop(time + duration + 0.05);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+  }
+  function schedule() {
+    while (nextTime < context.currentTime + 0.3) {
+      const index = step % melody.length;
+      if (index % 8 === 0) for (const pitch of chords[Math.floor(index / 8)]) note(pitch, nextTime, 3.4, 0.055);
+      if (melody[index] !== null) note(melody[index], nextTime, 1.3, 0.09);
+      step++;
+      nextTime += 0.48;
+    }
+  }
+  function volume() {
+    if (output) output.gain.setTargetAtTime(ducked ? 0.13 : 0.45, context.currentTime, 0.2);
+  }
+  async function play() {
+    if (!started || !enabled || scope.document.hidden) return;
+    try {
+      if (!context) {
+        const AudioContext = scope.AudioContext || scope.webkitAudioContext;
+        context = new AudioContext();
+        output = context.createGain();
+        output.connect(context.destination);
+        volume();
+        nextTime = context.currentTime;
+      }
+      await context.resume();
+      if (!enabled || scope.document.hidden) {
+        context.suspend();
+        return;
+      }
+      if (!timer) {
+        nextTime = Math.max(nextTime, context.currentTime);
+        schedule();
+        timer = scope.setInterval(schedule, 150);
+      }
+      label();
+    } catch {
+      button.textContent = "\u266B \u70B9\u51FB\u64AD\u653E\u97F3\u4E50";
+    }
+  }
+  function pause() {
+    if (timer) scope.clearInterval(timer);
+    timer = null;
+    context?.suspend().catch(() => {
+    });
+  }
+  button.onclick = () => {
+    enabled = !enabled;
+    try {
+      scope.localStorage.setItem("windvale.bgm", enabled ? "on" : "off");
+    } catch {
+    }
+    label();
+    if (enabled) {
+      started = true;
+      play();
+    } else pause();
+  };
+  scope.document.addEventListener("visibilitychange", () => {
+    if (scope.document.hidden) pause();
+    else play();
+  });
+  scope.addEventListener("pagehide", pause);
+  label();
+  return { start() {
+    started = true;
+    play();
+  }, duck(value) {
+    ducked = value;
+    volume();
+  } };
+}
+
 // src/practice-content.js
 function questionsForScene(scene) {
   const isMarket = scene === "market", isCafe = scene === "cafe";
@@ -26144,6 +26300,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     });
   }, updateVillagers = function(dt) {
     for (const npc of villagers) {
+      updateNpcWalk(npc, dt, !started || dialogNpc === npc);
       npc.person.mixer.update(dt);
       if (dialogNpc === npc) {
         const dx = pos.x - npc.body.position.x, dz = pos.z - npc.body.position.z;
@@ -26167,6 +26324,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     currentUtterance = null;
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, closeDialog = function() {
+    backgroundMusic.duck(false);
     feedbackController.cancel();
     stopSpeech();
     dialogNpc = null;
@@ -26204,7 +26362,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     answerInput.value = practice ? practiceAnswers[answerKey()] || "" : "";
     answerStatus.textContent = "";
     document.getElementById("answer-hint").hidden = true;
-    document.getElementById("answer-hint").textContent = practice ? practiceHints[text] : "";
+    document.getElementById("answer-hint").textContent = practice ? practiceHints[text].replace(" Example: ", "\n\nExample: ") : "";
     const hintToggle = document.getElementById("hint-toggle");
     hintToggle.hidden = !practice;
     hintToggle.textContent = "\u67E5\u770B\u82F1\u6587\u601D\u8DEF";
@@ -26227,6 +26385,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     const npc = nearestNpc();
     if (!npc) return;
     dialogNpc = npc;
+    backgroundMusic.duck(true);
     renderGreetingQuest(npc === villagers[0]);
     practiceIndex = npc.practiceIndex || 0;
     keys.clear();
@@ -26637,8 +26796,15 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
       const farmerMixer = new AnimationMixer(model);
       const idle = gltf.animations.find((clip) => /\|Idle$/.test(clip.name));
       if (!idle) throw Error("Farmer idle animation missing");
-      farmerMixer.clipAction(idle).play();
-      villagers.push({ body, person: { mixer: farmerMixer }, voiceGender: "male", talkDistance: isMarket ? 4 : 2.8, name: isMarket ? "Oliver \xB7 \u519C\u592B" : "\u6797\u53D4 \xB7 \u516C\u56ED\u8BDD\u9898", facingOffset: Math.PI, line: 0, lines: [], questions: isMarket ? null : parkQuestions, topic: isMarket ? null : "\u516C\u56ED / \u6563\u6B65 / \u6237\u5916\u6D3B\u52A8" });
+      const farmerActions = { idle: farmerMixer.clipAction(idle) };
+      farmerActions.idle.play();
+      if (!isMarket) {
+        const walk = gltf.animations.find((clip) => /\|Walk$/.test(clip.name));
+        if (!walk) throw Error("Farmer walk animation missing");
+        farmerActions.walk = farmerMixer.clipAction(walk);
+        farmerActions.walk.play().setEffectiveWeight(0).setEffectiveTimeScale(0.65);
+      }
+      villagers.push({ body, person: { mixer: farmerMixer, actions: farmerActions }, walkRoute: isMarket ? null : [[3, 0], [3, -5], [3, 0], [5, 0]], walkIndex: 0, voiceGender: "male", talkDistance: isMarket ? 4 : 2.8, name: isMarket ? "Oliver \xB7 \u519C\u592B" : "\u6797\u53D4 \xB7 \u516C\u56ED\u8BDD\u9898", facingOffset: Math.PI, line: 0, lines: [], questions: isMarket ? null : parkQuestions, topic: isMarket ? null : "\u516C\u56ED / \u6563\u6B65 / \u6237\u5916\u6D3B\u52A8" });
     }
     characterReady = true;
     startButton.disabled = false;
@@ -26650,6 +26816,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     startButton.onclick = () => location.reload();
     document.querySelector(".card p").textContent = "\u8BF7\u901A\u8FC7\u672C\u5730\u7F51\u9875\u5730\u5740\u6253\u5F00\uFF0C\u5E76\u786E\u8BA4 assets \u6587\u4EF6\u5939\u5B8C\u6574\u3002";
   }
+  const backgroundMusic = createBackgroundMusic(document.getElementById("music-toggle"));
   let dialogNpc = null, speakingNpc = null, speechToken = 0, currentUtterance = null;
   const talkButton = document.getElementById("talk"), dialog = document.getElementById("dialog"), voiceStatus = document.getElementById("voice-status");
   async function speakLine(npc, text) {
@@ -26778,6 +26945,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
       return;
     }
     started = true;
+    backgroundMusic.start();
     document.getElementById("welcome").style.display = "none";
     questToggle.hidden = false;
     renderGreetingQuest();
