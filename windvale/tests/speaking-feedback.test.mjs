@@ -33,9 +33,9 @@ test('frontend cancels stale responses and shows only key errors and improvement
   const oldDocument=globalThis.document,oldLocation=globalThis.location;const elements={};const submit=element();const input=element();let applied='';let resolveFetch;
   globalThis.document={getElementById:id=>elements[id]??=element(),querySelector:()=>submit,createElement:()=>element()};globalThis.location={protocol:'http:'};
   try{const controller=createFeedbackController({input,onApply:value=>applied=value,fetcher:()=>new Promise(resolve=>resolveFetch=resolve)});
-    const first=controller.request('Question',answer);controller.cancel();resolveFetch(Response.json({feedback:valid,disclaimer:'Text only'}));await first;assert.equal(elements['ai-feedback'].hidden,true);assert.equal(elements['ai-feedback-content'].children.length,0);assert.equal(submit.disabled,false);
+    controller.showHistory('Question');assert.equal(elements['ai-feedback'].hidden,true);elements['feedback-toggle'].onclick();assert.equal(elements['ai-feedback'].hidden,false);elements['feedback-toggle'].onclick();assert.equal(elements['ai-feedback'].hidden,true);const first=controller.request('Question',answer);controller.cancel();resolveFetch(Response.json({feedback:valid,disclaimer:'Text only'}));await first;assert.equal(elements['ai-feedback'].hidden,true);assert.equal(elements['ai-feedback-content'].children.length,0);assert.equal(submit.disabled,false);
     const second=controller.request('Question',answer);resolveFetch(Response.json({feedback:valid,disclaimer:'Text only'}));await second;assert.equal(elements['ai-feedback-status'].textContent,'点评完成（记录仅在当前页面保留）');assert.deepEqual(elements['ai-feedback-content'].children.filter(e=>e.textContent==='主要错误'||e.textContent==='改进点').map(e=>e.textContent),['主要错误','改进点']);assert(elements['ai-feedback-content'].children.some(e=>e.textContent==='文字表达参考分：5.5 / 9'));assert(!elements['ai-feedback-content'].children.some(e=>e.textContent.includes('改进回答')));
-    assert.equal(elements['feedback-counter'].textContent,'2 / 2');elements['feedback-previous'].onclick();assert.equal(elements['feedback-counter'].textContent,'1 / 2');assert.equal(elements['feedback-previous'].disabled,true);elements['feedback-next'].onclick();assert.equal(elements['feedback-counter'].textContent,'2 / 2');assert(elements['ai-feedback-content'].children.some(e=>e.textContent==='文字表达参考分：5.5 / 9'));const previousFeedback=elements['ai-feedback-content'].children.length;input.listeners.input();assert.equal(elements['ai-feedback'].hidden,false);assert.equal(elements['ai-feedback-content'].children.length,previousFeedback);
+    assert.equal(elements['feedback-counter'].textContent,'1 / 1');assert.equal(elements['feedback-previous'].disabled,true);assert.equal(elements['feedback-next'].disabled,true);const failed=controller.request('Question','failed answer');resolveFetch(Response.json({error:'请重试'},{status:502}));await failed;assert.equal(elements['feedback-counter'].textContent,'1 / 1');assert.equal(elements['ai-feedback-status'].textContent,'请重试');assert(!elements['ai-feedback-content'].children.some(e=>e.textContent.includes('failed answer')));const previousFeedback=elements['ai-feedback-content'].children.length;input.listeners.input();assert.equal(elements['ai-feedback'].hidden,false);assert.equal(elements['ai-feedback-content'].children.length,previousFeedback);
   }finally{globalThis.document=oldDocument;globalThis.location=oldLocation;}
 });
 
@@ -62,7 +62,7 @@ test('submission history persists answers and feedback across reloads', async()=
 test('page template includes all feedback card controls', async()=>{
   const {readFile}=await import('node:fs/promises');
   const page=await readFile(new URL('../src/page.html',import.meta.url),'utf8');
-  for(const id of ['feedback-previous','feedback-next','feedback-counter','ai-feedback-status','ai-feedback-content']) {
+  for(const id of ['feedback-toggle','feedback-previous','feedback-next','feedback-counter','ai-feedback-status','ai-feedback-content']) {
     assert.equal(page.split(`id="${id}"`).length-1,1,`missing or duplicate ${id}`);
   }
 });

@@ -14,7 +14,7 @@ const localAIFetch=proxyFetch(localProxy);
 const bundler=await context({entryPoints:['src/main.js'],bundle:true,format:'esm',target:'es2022',outfile:'app.js',sourcemap:true});
 await bundler.watch();await bundler.rebuild();
 await import('node:fs/promises').then(fs=>fs.copyFile('src/page.html','play.html'));
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.glb':'model/gltf-binary','.vrm':'model/gltf-binary','.png':'image/png','.svg':'image/svg+xml'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.glb':'model/gltf-binary','.vrm':'model/gltf-binary','.png':'image/png','.svg':'image/svg+xml'};
 const server=createServer(async(req,res)=>{
   try{
     const url=new URL(req.url,'http://localhost');
@@ -29,10 +29,23 @@ const server=createServer(async(req,res)=>{
     }
     if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);res.end();return;}
     const relative=decodeURIComponent(url.pathname).replace(/^\//,'')||'play.html';
-    if(!/^(?:play\.html|(?:village|cafe|market)-walk\.html|app\.js|assets\/[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+\.png)$/.test(relative)||relative.includes('..')){res.writeHead(404);res.end('Not found');return;}
-    const file=path.join(root,relative);if(!(await stat(file)).isFile())throw Error('missing');
-    const body=relative==='play.html'?await readFile('src/page.html'):await readFile(file);
-    res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:body);
+    if(!/^(?:play\.html|app\.js|style\.css|assets\/[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+\.png)$/.test(relative)||relative.includes('..')){res.writeHead(404);res.end('Not found');return;}
+    const file=path.join(root,relative);
+    const info=await stat(file);if(!info.isFile())throw Error('missing');
+    const cacheable=relative.startsWith('assets/')||relative.endsWith('.png');
+    const headers={'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':cacheable?'public, no-cache':'no-store'};
+    if(cacheable){
+      // 浏览器保存资源；再次访问只校验版本，未修改则不读取和传输模型。
+      const etag=`W/"${info.size}-${info.mtimeMs}"`;
+      headers.ETag=etag;
+      headers['Last-Modified']=info.mtime.toUTCString();
+      if(req.headers['if-none-match']?.split(',').map(value=>value.trim()).includes(etag)){
+        res.writeHead(304,headers);res.end();return;
+      }
+    }
+    if(req.method==='HEAD'){res.writeHead(200,headers);res.end();return;}
+    const body=relative==='play.html'?await readFile('src/page.html'):relative==='style.css'?await readFile('src/style.css'):await readFile(file);
+    res.writeHead(200,headers);res.end(body);
   }catch{if(!res.headersSent)res.writeHead(404);res.end('Not found');}
 });
 const port=Number(process.env.PORT||8080);

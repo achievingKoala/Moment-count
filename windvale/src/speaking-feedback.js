@@ -5,13 +5,17 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
   let storage; try { storage = globalThis.localStorage; } catch {}
   const history = createPracticeHistory(storage);
   const previous = document.getElementById('feedback-previous'), next = document.getElementById('feedback-next'), counter = document.getElementById('feedback-counter');
+  const toggle = document.getElementById('feedback-toggle');
+  let expanded = false;
+  function syncExpanded() { toggle.hidden = !currentHistoryQuestion; toggle.textContent = expanded ? '收起反馈记录' : '查看反馈记录'; toggle.setAttribute?.('aria-expanded', String(expanded)); panel.hidden = !currentHistoryQuestion || !expanded; }
+  toggle.onclick = () => { expanded = !expanded; syncExpanded(); };
   let activeRecord = null, currentHistoryQuestion = null, cardIndex = 0;
-  function recordsForQuestion() { return history.all().filter(record => record.question === currentHistoryQuestion); }
-  function showHistory(question) { currentHistoryQuestion = question; cardIndex = 0; renderHistory(); }
+  function recordsForQuestion() { return history.all().filter(record => record.question === currentHistoryQuestion && record.feedback); }
+  function showHistory(question) { currentHistoryQuestion = question; cardIndex = 0; expanded = false; renderHistory(); }
   function renderHistory() {
     const records = recordsForQuestion();
     cardIndex = Math.max(0, Math.min(cardIndex, records.length - 1));
-    panel.hidden = !currentHistoryQuestion;
+    syncExpanded();
     content.replaceChildren();
     previous.disabled = cardIndex >= records.length - 1;
     next.disabled = cardIndex === 0;
@@ -43,8 +47,8 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
       list('改进点', f.improvements.slice(0, 2));
   }
   async function request(question, answer) {
-    cancel(); showHistory(question); const token = sequence; const requestController = new AbortController(); controller = requestController; panel.hidden = false; status.textContent = 'AI 正在点评你的文字回答…'; submit.disabled = true; submit.textContent = '正在点评…';
-    const entry=history.add(question,answer); const record=entry.record; activeRecord=record; cardIndex=0; renderHistory();
+    cancel(); showHistory(question); expanded = true; syncExpanded(); const token = sequence; const requestController = new AbortController(); controller = requestController; panel.hidden = false; status.textContent = 'AI 正在点评你的文字回答…'; submit.disabled = true; submit.textContent = '正在点评…';
+    const entry=history.add(question,answer); const record=entry.record; activeRecord=record; cardIndex=0; renderHistory(); status.textContent='AI 正在点评你的文字回答…';
     if(!entry.saved) status.textContent+='（当前浏览器无法持久保存记录）';
     const timer = setTimeout(() => requestController.abort(), 32000);
     try {
@@ -57,7 +61,7 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
       const saved=history.update(record,{status:'点评完成',feedback:f}); activeRecord=null;renderHistory();
       status.textContent = saved?'点评完成':'点评完成（记录仅在当前页面保留）';
 
-    } catch (error) { if (token !== sequence) return; status.textContent = error.name === 'AbortError' ? '反馈等待超时，请再次提交。' : error.message; history.update(record,{status:status.textContent});activeRecord=null;renderHistory(); }
+    } catch (error) { if (token !== sequence) return; const message = error.name === 'AbortError' ? '反馈等待超时，请再次提交。' : error.message; history.update(record,{status:message});activeRecord=null;renderHistory();status.textContent=message; }
     finally { clearTimeout(timer); if (token === sequence) { controller = null; submit.disabled = false; submit.textContent = '再次提交获取反馈'; } }
   }
   renderHistory();
