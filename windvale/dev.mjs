@@ -13,7 +13,6 @@ const localProxy=process.env.LOCAL_AI_PROXY||'http://127.0.0.1:7897';
 const localAIFetch=proxyFetch(localProxy);
 const bundler=await context({entryPoints:['src/main.js'],bundle:true,format:'esm',target:'es2022',outfile:'app.js',sourcemap:true});
 await bundler.watch();await bundler.rebuild();
-await import('node:fs/promises').then(fs=>fs.copyFile('src/page.html','play.html'));
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.glb':'model/gltf-binary','.vrm':'model/gltf-binary','.png':'image/png','.svg':'image/svg+xml'};
 const server=createServer(async(req,res)=>{
   try{
@@ -44,7 +43,7 @@ const server=createServer(async(req,res)=>{
       }
     }
     if(req.method==='HEAD'){res.writeHead(200,headers);res.end();return;}
-    const body=relative==='play.html'?await readFile('src/page.html'):relative==='style.css'?await readFile('src/style.css'):await readFile(file);
+    const body=relative==='style.css'?await readFile('src/style.css'):await readFile(file);
     res.writeHead(200,headers);res.end(body);
   }catch{if(!res.headersSent)res.writeHead(404);res.end('Not found');}
 });

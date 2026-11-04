@@ -6,7 +6,6 @@ await build({
   entryPoints:['src/main.js'], bundle:true, format:'esm', target:'es2022',
   outfile:'app.js', sourcemap:true
 });
-await copyFile('src/page.html','play.html');
 await copyFile('src/style.css','style.css');
 
-console.log('Built shared game page, runtime and stylesheet.');
+console.log('Built runtime and stylesheet; play.html is the shared game page.');

@@ -22,6 +22,9 @@ function updateNpcWalk(npc, dt, paused) {
 
 // src/background-music.js
 function createBackgroundMusic(button, scope = window) {
+  if (!button) return { start() {
+  }, duck() {
+  } };
   let context, output, timer, nextTime = 0, step = 0;
   let enabled = true, started = false, ducked = false;
   try {

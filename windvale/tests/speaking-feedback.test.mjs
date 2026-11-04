@@ -61,7 +61,7 @@ test('submission history persists answers and feedback across reloads', async()=
 
 test('page template includes all feedback card controls', async()=>{
   const {readFile}=await import('node:fs/promises');
-  const page=await readFile(new URL('../src/page.html',import.meta.url),'utf8');
+  const page=await readFile(new URL('../play.html',import.meta.url),'utf8');
   for(const id of ['feedback-toggle','feedback-previous','feedback-next','feedback-counter','ai-feedback-status','ai-feedback-content']) {
     assert.equal(page.split(`id="${id}"`).length-1,1,`missing or duplicate ${id}`);
   }

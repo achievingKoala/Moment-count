@@ -1,5 +1,7 @@
 // 本地合成的轻柔循环旋律，无外部音频、下载或 AI 请求。
 export function createBackgroundMusic(button, scope = window) {
+  // Older cached pages may not have the music control yet.
+  if (!button) return { start() {}, duck() {} };
   let context, output, timer, nextTime = 0, step = 0;
   let enabled = true, started = false, ducked = false;
   try { enabled = scope.localStorage.getItem('windvale.bgm') !== 'off'; } catch {}
