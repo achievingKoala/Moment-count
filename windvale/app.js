@@ -178,7 +178,7 @@ var parkQuestions = ["Do you often go to parks?", "What do you usually do when y
 
 // src/character-voice.js
 var femaleNames = /female|woman|samantha|victoria|karen|moira|tessa|fiona|serena|ava|allison|susan|zira|hazel|sonia|jenny|aria|xiaoxiao|xiaoyi|ting.?ting|mei.?jia|sin.?ji|huihui|yaoyao|晓晓|晓伊|婷婷|慧慧|瑶瑶|女声/i;
-var maleNames = /\bmale\b|\bman\b|daniel|alex\b|david|mark\b|george|james|guy\b|ryan|yunxi|yunjian|kangkang|云希|云健|康康|男声/i;
+var maleNames = /\bmale\b|\bman\b|daniel|alex\b|david|mark\b|george|james|guy\b|ryan|yunxi|yunjian|yunyang|yunfeng|yunhao|yunxia|yunze|kangkang|yusheng|云希|云健|云扬|云枫|云皓|云夏|云泽|康康|宇生|男声/i;
 function selectCharacterVoice(voices, gender, english) {
   const language = english ? /^en/i : /^zh/i;
   const candidates = voices.filter((voice) => language.test(voice.lang));
@@ -186,8 +186,13 @@ function selectCharacterVoice(voices, gender, english) {
   const opposite = gender === "female" ? maleNames : femaleNames;
   return candidates.filter((voice) => preferred.test(voice.name) && !opposite.test(voice.name)).sort((a, b) => Number(b.localService) - Number(a.localService))[0] || null;
 }
+function selectFallbackVoice(voices, english) {
+  const language = english ? /^en/i : /^zh/i;
+  return voices.filter((voice) => language.test(voice.lang)).sort((a, b) => Number(Boolean(b.default)) - Number(Boolean(a.default)) || Number(Boolean(b.localService)) - Number(Boolean(a.localService)))[0] || null;
+}
 function waitForCharacterVoice(synth, gender, english, timeoutMs = 2e3) {
-  const current = selectCharacterVoice(synth.getVoices(), gender, english);
+  const voices = synth.getVoices();
+  const current = selectCharacterVoice(voices, gender, english) || selectFallbackVoice(voices, english);
   if (current) return Promise.resolve(current);
   return new Promise((resolve) => {
     let timer;
@@ -197,11 +202,12 @@ function waitForCharacterVoice(synth, gender, english, timeoutMs = 2e3) {
       resolve(voice);
     }
     function changed() {
-      const voice = selectCharacterVoice(synth.getVoices(), gender, english);
+      const available = synth.getVoices();
+      const voice = selectCharacterVoice(available, gender, english) || selectFallbackVoice(available, english);
       if (voice) finish(voice);
     }
     synth.addEventListener("voiceschanged", changed);
-    timer = setTimeout(() => finish(selectCharacterVoice(synth.getVoices(), gender, english)), timeoutMs);
+    timer = setTimeout(() => finish(selectCharacterVoice(synth.getVoices(), gender, english) || selectFallbackVoice(synth.getVoices(), english)), timeoutMs);
     changed();
   });
 }
@@ -239,7 +245,9 @@ function createPracticeHistory(storage) {
 }
 
 // src/speaking-feedback.js
-function createFeedbackController({ input, onApply, fetcher = fetch }) {
+function createFeedbackController({ input, onApply, onSpeak = () => {
+}, onStopSpeech = () => {
+}, fetcher = fetch }) {
   const panel = document.getElementById("ai-feedback"), status = document.getElementById("ai-feedback-status"), content = document.getElementById("ai-feedback-content");
   const submit = document.querySelector('#answer-form button[type="submit"]');
   let storage;
@@ -313,6 +321,7 @@ function createFeedbackController({ input, onApply, fetcher = fetch }) {
     }
   }
   function cancel() {
+    onStopSpeech();
     if (activeRecord) {
       history.update(activeRecord, { status: "\u8BF7\u6C42\u5DF2\u4E2D\u65AD\uFF0C\u53EF\u91CD\u65B0\u63D0\u4EA4" });
       activeRecord = null;
@@ -354,6 +363,13 @@ function createFeedbackController({ input, onApply, fetcher = fetch }) {
       content.append(row);
     }
     list("\u6539\u8FDB\u70B9", f.improvements.slice(0, 2));
+    if (f.summary) {
+      paragraph("\u603B\u7ED3\u4E0E\u6539\u8FDB\u5EFA\u8BAE", content, "h4");
+      paragraph(f.summary);
+      const replay = paragraph("\u6717\u8BFB\u603B\u7ED3", content, "button");
+      replay.type = "button";
+      replay.onclick = () => onSpeak(f.summary);
+    }
   }
   async function request(question, answer) {
     cancel();
@@ -392,6 +408,7 @@ function createFeedbackController({ input, onApply, fetcher = fetch }) {
       activeRecord = null;
       renderHistory();
       status.textContent = saved ? "\u70B9\u8BC4\u5B8C\u6210" : "\u70B9\u8BC4\u5B8C\u6210\uFF08\u8BB0\u5F55\u4EC5\u5728\u5F53\u524D\u9875\u9762\u4FDD\u7559\uFF09";
+      if (f.summary) onSpeak(f.summary);
     } catch (error) {
       if (token !== sequence) return;
       const message = error.name === "AbortError" ? "\u53CD\u9988\u7B49\u5F85\u8D85\u65F6\uFF0C\u8BF7\u518D\u6B21\u63D0\u4EA4\u3002" : error.message;
@@ -26822,7 +26839,7 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
   const backgroundMusic = createBackgroundMusic(document.getElementById("music-toggle"));
   let dialogNpc = null, speakingNpc = null, speechToken = 0, currentUtterance = null;
   const talkButton = document.getElementById("talk"), dialog = document.getElementById("dialog"), voiceStatus = document.getElementById("voice-status");
-  async function speakLine(npc, text) {
+  async function speakLine(npc, text, english = isPracticeNpc(npc)) {
     stopSpeech();
     const token = speechToken;
     voiceStatus.textContent = "";
@@ -26832,15 +26849,9 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     }
     const synth = window.speechSynthesis, utterance = new SpeechSynthesisUtterance(text);
     currentUtterance = utterance;
-    const english = isPracticeNpc(npc);
     voiceStatus.textContent = "\u6B63\u5728\u51C6\u5907\u89D2\u8272\u8BED\u97F3\u2026";
     const voice = await waitForCharacterVoice(synth, npc.voiceGender, english);
     if (token !== speechToken) return;
-    if (!voice) {
-      currentUtterance = null;
-      voiceStatus.textContent = "\u672A\u627E\u5230\u5339\u914D\u7684\u89D2\u8272\u8BED\u97F3\uFF0C\u8BF7\u5B89\u88C5\u5BF9\u5E94\u7684\u7CFB\u7EDF\u7537\u58F0\u6216\u5973\u58F0\u540E\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\u3002";
-      return;
-    }
     utterance.lang = english ? "en-GB" : "zh-CN";
     if (voice) utterance.voice = voice;
     utterance.rate = 0.95;
@@ -26856,11 +26867,13 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
       currentUtterance = null;
       voiceStatus.textContent = "";
     };
-    utterance.onerror = () => {
+    utterance.onerror = (event) => {
       if (token !== speechToken) return;
       speakingNpc = null;
-      voiceStatus.textContent = "\u8BED\u97F3\u672A\u80FD\u64AD\u653E\uFF0C\u53EF\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\uFF0C\u5E76\u68C0\u67E5\u7CFB\u7EDF\u8BED\u97F3\u3002";
+      currentUtterance = null;
+      voiceStatus.textContent = event.error === "not-allowed" ? "\u6D4F\u89C8\u5668\u963B\u6B62\u4E86\u81EA\u52A8\u6717\u8BFB\uFF0C\u8BF7\u70B9\u51FB\u201C\u6717\u8BFB\u603B\u7ED3\u201D\u64AD\u653E\u3002" : "\u8BED\u97F3\u672A\u80FD\u64AD\u653E\uFF0C\u8BF7\u70B9\u51FB\u201C\u6717\u8BFB\u603B\u7ED3\u201D\u6216\u201C\u518D\u542C\u4E00\u904D\u201D\u91CD\u8BD5\u3002";
     };
+    synth.resume();
     synth.speak(utterance);
     setTimeout(() => {
       if (token === speechToken && currentUtterance === utterance && !speakingNpc) voiceStatus.textContent = "\u5982\u679C\u6CA1\u6709\u58F0\u97F3\uFF0C\u8BF7\u68C0\u67E5\u97F3\u91CF\u548C\u7CFB\u7EDF\u8BED\u97F3\uFF0C\u6216\u70B9\u51FB\u201C\u518D\u542C\u4E00\u904D\u201D\u3002";
@@ -26892,7 +26905,9 @@ function addPrimitiveAttributes(geometry, primitiveDef, parser) {
     }
   });
   const answerForm = document.getElementById("answer-form"), answerInput = document.getElementById("practice-answer"), answerStatus = document.getElementById("answer-status");
-  const feedbackController = createFeedbackController({ input: answerInput, onApply: (text) => {
+  const feedbackController = createFeedbackController({ input: answerInput, onSpeak: (text) => {
+    if (dialogNpc) speakLine(dialogNpc, text, false);
+  }, onStopSpeech: stopSpeech, onApply: (text) => {
     answerInput.value = text;
     practiceAnswers[answerKey()] = text;
     answerStatus.textContent = "\u5DF2\u91C7\u7528\u4FEE\u6539\uFF0C\u68C0\u67E5\u540E\u53EF\u518D\u6B21\u63D0\u4EA4\u3002";

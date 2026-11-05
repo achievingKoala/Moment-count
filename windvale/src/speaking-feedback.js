@@ -1,5 +1,5 @@
 import {createPracticeHistory} from './practice-history.js';
-export function createFeedbackController({ input, onApply, fetcher = fetch }) {
+export function createFeedbackController({ input, onApply, onSpeak = () => {}, onStopSpeech = () => {}, fetcher = fetch }) {
   const panel = document.getElementById('ai-feedback'), status = document.getElementById('ai-feedback-status'), content = document.getElementById('ai-feedback-content');
   const submit = document.querySelector('#answer-form button[type="submit"]');
   let storage; try { storage = globalThis.localStorage; } catch {}
@@ -36,7 +36,7 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
   next.onclick = () => { if (activeRecord) return; cardIndex--; renderHistory(); };
   let sequence = 0, controller = null;
   function clearPendingRecord() { if(activeRecord){history.update(activeRecord,{status:'请求已中断，可重新提交'});activeRecord=null;renderHistory();} }
-  function cancel() { if(activeRecord){history.update(activeRecord,{status:'请求已中断，可重新提交'});activeRecord=null;renderHistory();} sequence++; controller?.abort(); controller = null; submit.disabled = false; submit.textContent = '提交回答并获取反馈'; panel.hidden = true; status.textContent = ''; content.replaceChildren(); }
+  function cancel() { onStopSpeech(); if(activeRecord){history.update(activeRecord,{status:'请求已中断，可重新提交'});activeRecord=null;renderHistory();} sequence++; controller?.abort(); controller = null; submit.disabled = false; submit.textContent = '提交回答并获取反馈'; panel.hidden = true; status.textContent = ''; content.replaceChildren(); }
   function paragraph(text, parent = content, tag = 'p') { const node = document.createElement(tag); node.textContent = text; parent.append(node); return node; }
   function list(title, items) { if (!items.length) return; paragraph(title, content, 'h4'); const ul = document.createElement('ul'); for (const item of items) paragraph(item, ul, 'li'); content.append(ul); }
   function renderFeedback(f) {
@@ -51,6 +51,13 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
         paragraph(correction.reason, row); content.append(row);
       }
       list('改进点', f.improvements.slice(0, 2));
+      if (f.summary) {
+        paragraph('总结与改进建议', content, 'h4');
+        paragraph(f.summary);
+        const replay = paragraph('朗读总结', content, 'button');
+        replay.type = 'button';
+        replay.onclick = () => onSpeak(f.summary);
+      }
   }
   async function request(question, answer) {
     cancel(); showHistory(question); expanded = true; syncExpanded(); const token = sequence; const requestController = new AbortController(); controller = requestController; panel.hidden = false; status.textContent = 'AI 正在点评你的文字回答…'; submit.disabled = true; submit.textContent = '正在点评…';
@@ -66,6 +73,7 @@ export function createFeedbackController({ input, onApply, fetcher = fetch }) {
       const f = payload.feedback; if (!f || !Array.isArray(f.corrections) || !Array.isArray(f.strengths) || !Array.isArray(f.improvements)) throw Error('反馈格式不正确，请重试。');
       const saved=history.update(record,{status:'点评完成',feedback:f}); activeRecord=null;renderHistory();
       status.textContent = saved?'点评完成':'点评完成（记录仅在当前页面保留）';
+      if (f.summary) onSpeak(f.summary);
 
     } catch (error) { if (token !== sequence) return; const message = error.name === 'AbortError' ? '反馈等待超时，请再次提交。' : error.message; history.update(record,{status:message});activeRecord=null;renderHistory();status.textContent=message; }
     finally { clearTimeout(timer); if (token === sequence) { controller = null; submit.disabled = false; submit.textContent = '再次提交获取反馈'; } }
